@@ -1,232 +1,379 @@
 /* app.js — Lumina Clippers LinkedIn Audit Tool frontend */
 
-// ── Config ──
-const API_BASE = window.location.hostname === 'localhost'
-  ? 'http://localhost:8000'
-  : 'https://lumina-audit-api.onrender.com';
+// API base URL — set via inline script in index.html
+const API_BASE = (typeof window !== 'undefined' && window.LUMINA_API_URL)
+  ? window.LUMINA_API_URL.replace(/\/$/, '')
+  : '';
 
-const POLL_INTERVAL_MS = 2500;
-const MAX_POLL_ATTEMPTS = 120; // 5 minutes
-
-// ── State ──
-let currentJobId = null;
-let pollTimer = null;
-let pollAttempts = 0;
-
-// ── DOM refs ──
-const urlInput      = document.getElementById('linkedinUrl');
-const analyzeBtn    = document.getElementById('analyzeBtn');
-const inputError    = document.getElementById('inputError');
-const progressSec   = document.getElementById('progressSection');
-const progressBar   = document.getElementById('progressBar');
-const progressLabel = document.getElementById('progressLabel');
-const jobIdDisplay  = document.getElementById('jobIdDisplay');
-const stepEls       = document.querySelectorAll('.step');
-const resultSec     = document.getElementById('resultSection');
-const resultName    = document.getElementById('resultName');
-const downloadBtn   = document.getElementById('downloadBtn');
-const scoreValue    = document.getElementById('scoreValue');
-const errorSec      = document.getElementById('errorSection');
-const errorMsg      = document.getElementById('errorMsg');
-const retryBtn      = document.getElementById('retryBtn');
-const jobsTable     = document.getElementById('jobsTable');
-
-// ── Step metadata ──
-const STEP_LABELS = {
-  queued:      { step: 0,  label: 'Queued…',              pct: 2  },
-  scraping:    { step: 1,  label: 'Scraping LinkedIn…',   pct: 20 },
-  researching: { step: 4,  label: 'Researching online…',  pct: 55 },
-  analyzing:   { step: 5,  label: 'Analyzing with AI…',   pct: 75 },
-  generating:  { step: 6,  label: 'Generating PDF…',      pct: 90 },
-  complete:    { step: 6,  label: 'Complete!',              pct: 100 },
-  failed:      { step: -1, label: 'Failed',                pct: 0  },
+// ============================================================
+// STATE
+// ============================================================
+const state = {
+  jobs: {},          // jobId → { id, url, name, status, progress, result, error, ts }
 };
 
-// ── Utility ──
-function hide(...els) { els.forEach(el => el.classList.add('hidden')); }
-function show(...els) { els.forEach(el => el.classList.remove('hidden')); }
-
-function setInputError(msg) {
-  inputError.textContent = msg;
-  show(inputError);
+// ============================================================
+// UTILITIES
+// ============================================================
+function genId() {
+  return Math.random().toString(36).slice(2, 9);
 }
 
-function clearInputError() {
-  inputError.textContent = '';
-  hide(inputError);
-}
-
-function validateUrl(url) {
-  const trimmed = url.trim().replace(/\/$/, '').split('?')[0];
-  const re = /^https?:\/\/(www\.)?linkedin\.com\/in\/[\w\-%.]+\/?$/i;
-  return re.test(trimmed) ? trimmed : null;
-}
-
-// ── Analyze flow ──
-analyzeBtn.addEventListener('click', startAnalysis);
-urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') startAnalysis(); });
-retryBtn.addEventListener('click', resetUI);
-
-async function startAnalysis() {
-  clearInputError();
-  const raw = urlInput.value;
-  const url = validateUrl(raw);
-
-  if (!url) {
-    setInputError('Please enter a valid LinkedIn profile URL (e.g. https://www.linkedin.com/in/username)');
-    return;
-  }
-
-  hide(resultSec, errorSec);
-  show(progressSec);
-  analyzeBtn.disabled = true;
-
+function formatUrl(url) {
   try {
-    const res = await fetch(`${API_BASE}/analyze`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url }),
-    });
-
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.detail || `Server error ${res.status}`);
-    }
-
-    const { job_id } = await res.json();
-    currentJobId = job_id;
-    jobIdDisplay.textContent = job_id.slice(0, 8) + '…';
-
-    startPolling(job_id);
-  } catch (err) {
-    showError(err.message || 'Failed to start audit.');
-  }
-}
-
-// ── Polling ──
-function startPolling(jobId) {
-  pollAttempts = 0;
-  pollTimer = setInterval(() => pollStatus(jobId), POLL_INTERVAL_MS);
-}
-
-async function pollStatus(jobId) {
-  pollAttempts++;
-  if (pollAttempts > MAX_POLL_ATTEMPTS) {
-    clearInterval(pollTimer);
-    showError('Audit timed out. The LinkedIn profile may be unavailable or the pipeline stalled.');
-    return;
-  }
-
-  try {
-    const res = await fetch(`${API_BASE}/status/${jobId}`);
-    if (!res.ok) return;
-    const job = await res.json();
-    updateProgress(job);
-
-    if (job.status === 'complete') {
-      clearInterval(pollTimer);
-      showResult(job);
-      loadJobs();
-    } else if (job.status === 'failed') {
-      clearInterval(pollTimer);
-      showError(job.error_msg || 'The audit pipeline encountered an error.');
-      loadJobs();
-    }
+    const u = new URL(url);
+    return u.hostname + u.pathname.replace(/\/$/, '');
   } catch {
-    // Network hiccup — keep polling
+    return url;
   }
 }
 
-// ── Progress UI ──
-function updateProgress(job) {
-  const meta = STEP_LABELS[job.status] || { step: job.step || 0, label: job.status, pct: 10 };
-  const pct = meta.pct || Math.min(((job.step || 0) / 6) * 100, 95);
+function nameFromUrl(url) {
+  try {
+    const parts = new URL(url).pathname.split('/').filter(Boolean);
+    // linkedin.com/in/<slug>  → use slug
+    const inIdx = parts.indexOf('in');
+    if (inIdx !== -1 && parts[inIdx + 1]) {
+      return parts[inIdx + 1].replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+    return parts.pop() || url;
+  } catch {
+    return url;
+  }
+}
 
-  progressBar.style.width = `${pct}%`;
-  progressLabel.textContent = meta.label;
+function sanitizeLinkedInUrl(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  // Allow full URLs or short "linkedin.com/in/..." 
+  try {
+    const u = new URL(trimmed.startsWith('http') ? trimmed : 'https://' + trimmed);
+    if (!u.hostname.includes('linkedin.com')) return null;
+    return u.href;
+  } catch {
+    return null;
+  }
+}
 
-  stepEls.forEach(el => {
-    const s = parseInt(el.dataset.step, 10);
-    el.classList.toggle('done', s < meta.step);
-    el.classList.toggle('active', s === meta.step);
+// ============================================================
+// DOM REFS
+// ============================================================
+const urlInput    = document.getElementById('url-input');
+const analyzeBtn  = document.getElementById('analyze-btn');
+const inputError  = document.getElementById('input-error');
+const emptyState  = document.getElementById('empty-state');
+
+const progressSection  = document.getElementById('progress-section');
+const completedSection = document.getElementById('completed-section');
+const failedSection    = document.getElementById('failed-section');
+
+const progressJobs  = document.getElementById('progress-jobs');
+const completedJobs = document.getElementById('completed-jobs');
+const failedJobs    = document.getElementById('failed-jobs');
+
+// ============================================================
+// RENDER
+// ============================================================
+function render() {
+  const jobs = Object.values(state.jobs);
+  const inProgress = jobs.filter(j => j.status === 'pending' || j.status === 'running');
+  const completed  = jobs.filter(j => j.status === 'complete');
+  const failed     = jobs.filter(j => j.status === 'failed');
+
+  // Empty state
+  emptyState.style.display = jobs.length === 0 ? '' : 'none';
+
+  // Sections
+  progressSection.style.display  = inProgress.length ? '' : 'none';
+  completedSection.style.display = completed.length  ? '' : 'none';
+  failedSection.style.display    = failed.length     ? '' : 'none';
+
+  progressJobs.innerHTML  = inProgress.map(renderCard).join('');
+  completedJobs.innerHTML = completed.map(renderCard).join('');
+  failedJobs.innerHTML    = failed.map(renderCard).join('');
+}
+
+function renderCard(job) {
+  const statusBadge = {
+    pending:  '<span class="badge badge-pending">Pending</span>',
+    running:  '<span class="badge badge-running">Running</span>',
+    complete: '<span class="badge badge-complete">Complete</span>',
+    failed:   '<span class="badge badge-failed">Failed</span>',
+  }[job.status] || '';
+
+  const progressBar = (job.status === 'pending' || job.status === 'running')
+    ? `<div class="progress-bar-wrap">
+         <div class="progress-bar" style="width:${job.progress ?? 0}%"></div>
+       </div>
+       <div class="progress-label">${job.statusLabel || 'Analysing…'}</div>`
+    : '';
+
+  const resultHtml = job.status === 'complete' && job.result
+    ? renderAuditResult(job.result, job.id)
+    : '';
+
+  const errorHtml = job.status === 'failed'
+    ? `<div style="color:var(--color-error);font-size:var(--text-xs);">${job.error || 'Unknown error'}</div>`
+    : '';
+
+  const copyBtn = job.status === 'complete'
+    ? `<button class="btn btn-outline" style="font-size:var(--text-xs);padding:var(--space-1) var(--space-3)" onclick="copyResult('${job.id}')">
+         Copy JSON
+       </button>`
+    : '';
+
+  const dismissBtn = `<button class="btn-icon" title="Dismiss" onclick="dismissJob('${job.id}')">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  </button>`;
+
+  return `
+  <div class="job-card" id="job-${job.id}">
+    <div class="job-card-header">
+      <div class="job-card-meta">
+        <div class="job-card-name">${job.name}</div>
+        <div class="job-card-url">${formatUrl(job.url)}</div>
+      </div>
+      <div class="job-card-actions">
+        ${statusBadge}
+        ${copyBtn}
+        ${dismissBtn}
+      </div>
+    </div>
+    ${progressBar}
+    ${resultHtml}
+    ${errorHtml}
+  </div>`;
+}
+
+function renderAuditResult(result, jobId) {
+  // Score row
+  const scores = [
+    { label: 'Personal Brand',  value: result.personal_brand_score },
+    { label: 'Company',         value: result.company_score },
+    { label: 'Content',         value: result.content_score },
+    { label: 'Overall',         value: result.overall_score },
+  ].filter(s => s.value != null);
+
+  const scoreHtml = scores.length
+    ? `<div class="score-row">${scores.map(s =>
+        `<div class="score-card">
+           <div class="score-value">${s.value}<span style="font-size:var(--text-sm);font-weight:400">/10</span></div>
+           <div class="score-label">${s.label}</div>
+         </div>`
+      ).join('')}</div>`
+    : '';
+
+  // Tabs: Summary | Strengths | Gaps | Recommendations | Raw
+  const tabId = `tabs-${jobId}`;
+  const panelId = `panel-${jobId}`;
+
+  const sections = [
+    { key: 'summary',         label: 'Summary',        field: 'summary' },
+    { key: 'strengths',       label: 'Strengths',      field: 'strengths' },
+    { key: 'gaps',            label: 'Gaps',           field: 'gaps' },
+    { key: 'recommendations', label: 'Recommendations',field: 'recommendations' },
+  ].filter(s => result[s.field]);
+
+  const tabsHtml = `
+  <div class="tabs" id="${tabId}" role="tablist">
+    ${sections.map((s, i) =>
+      `<button class="tab ${i === 0 ? 'active' : ''}" role="tab"
+        onclick="switchTab('${tabId}','${panelId}','${s.key}')">
+        ${s.label}
+      </button>`
+    ).join('')}
+    <button class="tab" role="tab" onclick="switchTab('${tabId}','${panelId}','raw')">
+      Raw
+    </button>
+  </div>`;
+
+  const panelsHtml = `
+  <div id="${panelId}">
+    ${sections.map((s, i) => `
+      <div data-tab="${s.key}" style="display:${i === 0 ? '' : 'none'}">
+        ${renderInsight(s.label, result[s.field])}
+      </div>`
+    ).join('')}
+    <div data-tab="raw" style="display:none">
+      <pre class="raw-json">${JSON.stringify(result, null, 2)}</pre>
+    </div>
+  </div>`;
+
+  return `<div class="audit-result">${scoreHtml}${tabsHtml}${panelsHtml}</div>`;
+}
+
+function renderInsight(heading, content) {
+  if (Array.isArray(content)) {
+    return `
+      <div class="insight-section">
+        <div class="insight-heading">${heading}</div>
+        <ul class="insight-list">
+          ${content.map(item => `<li class="insight-item">${item}</li>`).join('')}
+        </ul>
+      </div>`;
+  }
+  if (typeof content === 'string') {
+    return `
+      <div class="insight-section">
+        <div class="insight-heading">${heading}</div>
+        <p style="font-size:var(--text-sm);color:var(--color-text-muted);line-height:1.6">${content}</p>
+      </div>`;
+  }
+  return '';
+}
+
+// ============================================================
+// TAB SWITCHING
+// ============================================================
+function switchTab(tabsId, panelId, key) {
+  const tabsEl  = document.getElementById(tabsId);
+  const panelEl = document.getElementById(panelId);
+  if (!tabsEl || !panelEl) return;
+
+  tabsEl.querySelectorAll('.tab').forEach((btn, i) => {
+    const tabKey = btn.getAttribute('onclick').match(/'([^']+)'\s*\)$/)?.[1];
+    btn.classList.toggle('active', tabKey === key);
+  });
+  panelEl.querySelectorAll('[data-tab]').forEach(div => {
+    div.style.display = div.dataset.tab === key ? '' : 'none';
   });
 }
 
-// ── Result UI ──
-function showResult(job) {
-  hide(progressSec, errorSec);
-  show(resultSec);
+// ============================================================
+// COPY / DISMISS
+// ============================================================
+function copyResult(jobId) {
+  const job = state.jobs[jobId];
+  if (!job?.result) return;
+  navigator.clipboard.writeText(JSON.stringify(job.result, null, 2))
+    .then(() => {
+      const btn = document.querySelector(`#job-${jobId} .btn-outline`);
+      if (btn) { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy JSON', 1500); }
+    })
+    .catch(() => {});
+}
 
-  resultName.textContent = job.prospect_name || 'Audit Complete';
-  scoreValue.textContent = job.brand_score != null ? job.brand_score : '--';
+function dismissJob(jobId) {
+  delete state.jobs[jobId];
+  render();
+}
 
-  downloadBtn.onclick = () => {
-    window.open(`${API_BASE}/download/${job.id}`, '_blank');
+// ============================================================
+// API CALLS
+// ============================================================
+async function submitAudit(profileUrl) {
+  const res = await fetch(`${API_BASE}/audit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profile_url: profileUrl }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.detail || err.error || `HTTP ${res.status}`);
+  }
+  return res.json(); // { job_id }
+}
+
+async function pollStatus(jobId, stateJobId) {
+  const INTERVAL = 2500;
+  const MAX_POLLS = 120; // 5 min
+  let polls = 0;
+
+  const tick = async () => {
+    if (!state.jobs[stateJobId]) return; // dismissed
+    polls++;
+    if (polls > MAX_POLLS) {
+      state.jobs[stateJobId].status = 'failed';
+      state.jobs[stateJobId].error  = 'Timed out waiting for result';
+      render();
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/audit/${jobId}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      const job = state.jobs[stateJobId];
+      if (!job) return;
+
+      job.progress    = data.progress ?? job.progress;
+      job.statusLabel = data.status_label ?? '';
+
+      if (data.status === 'complete') {
+        job.status  = 'complete';
+        job.result  = data.result;
+        render();
+        return;
+      }
+      if (data.status === 'failed') {
+        job.status = 'failed';
+        job.error  = data.error || 'Audit failed';
+        render();
+        return;
+      }
+
+      job.status = data.status || 'running';
+      render();
+      setTimeout(tick, INTERVAL);
+    } catch (err) {
+      const job = state.jobs[stateJobId];
+      if (job) { job.status = 'failed'; job.error = err.message; render(); }
+    }
   };
 
-  analyzeBtn.disabled = false;
+  setTimeout(tick, INTERVAL);
 }
 
-function showError(msg) {
-  hide(progressSec, resultSec);
-  show(errorSec);
-  errorMsg.textContent = msg;
-  analyzeBtn.disabled = false;
-}
+// ============================================================
+// EVENT HANDLERS
+// ============================================================
+analyzeBtn.addEventListener('click', async () => {
+  const raw = urlInput.value;
+  const url = sanitizeLinkedInUrl(raw);
 
-function resetUI() {
-  hide(progressSec, resultSec, errorSec, inputError);
-  urlInput.value = '';
-  currentJobId = null;
-  if (pollTimer) clearInterval(pollTimer);
-}
+  inputError.style.display = 'none';
 
-// ── Jobs dashboard ──
-async function loadJobs() {
-  try {
-    const res = await fetch(`${API_BASE}/jobs`);
-    if (!res.ok) return;
-    const jobs = await res.json();
-    renderJobs(jobs);
-  } catch {
-    // Silently fail
-  }
-}
-
-function renderJobs(jobs) {
-  if (!jobs.length) {
-    jobsTable.innerHTML = '<div class="jobs-empty">No audits yet.</div>';
+  if (!url) {
+    inputError.textContent = 'Please enter a valid LinkedIn profile URL (e.g. https://linkedin.com/in/username)';
+    inputError.style.display = '';
+    urlInput.focus();
     return;
   }
 
-  jobsTable.innerHTML = jobs.map(job => {
-    const name = job.prospect_name || job.url.replace('https://www.linkedin.com/in/', '');
-    const statusClass = `status-${job.status}`;
-    const scoreText = job.brand_score != null ? `Score: ${job.brand_score}` : '';
-    const downloadHtml = job.status === 'complete'
-      ? `<button class="btn btn-secondary job-download-btn" onclick="window.open('${API_BASE}/download/${job.id}', '_blank')">Download</button>`
-      : '';
+  urlInput.value = '';
+  analyzeBtn.disabled = true;
 
-    return `
-      <div class="job-row">
-        <div>
-          <div class="job-name">${escHtml(name)}</div>
-          <div class="job-url">${escHtml(job.url)}</div>
-        </div>
-        <div class="job-score">${escHtml(scoreText)}</div>
-        <span class="job-status ${statusClass}">${escHtml(job.status)}</span>
-        ${downloadHtml}
-      </div>
-    `;
-  }).join('');
-}
+  const localId = genId();
+  state.jobs[localId] = {
+    id: localId,
+    url,
+    name: nameFromUrl(url),
+    status: 'pending',
+    progress: 0,
+    statusLabel: 'Submitting…',
+    result: null,
+    error: null,
+  };
+  render();
 
-function escHtml(str) {
-  if (!str) return '';
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
+  try {
+    const { job_id } = await submitAudit(url);
+    state.jobs[localId].status      = 'running';
+    state.jobs[localId].statusLabel = 'Running…';
+    render();
+    pollStatus(job_id, localId);
+  } catch (err) {
+    state.jobs[localId].status = 'failed';
+    state.jobs[localId].error  = err.message;
+    render();
+  } finally {
+    analyzeBtn.disabled = false;
+  }
+});
 
-// Initial load
-loadJobs();
-// Refresh dashboard every 10s
-setInterval(loadJobs, 10_000);
+urlInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') analyzeBtn.click();
+});
