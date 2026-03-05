@@ -1,101 +1,106 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Lumina Clippers — LinkedIn Audit Tool</title>
-  <link rel="stylesheet" href="style.css" />
+<!--
+   ______                            __
+  / ____/___  ____ ___  ____  __  __/ /____  _____
+ / /   / __ \/ __ `__ \/ __ \/ / / / __/ _ \/ ___/
+/ /___/ /_/ / / / / / / /_/ / /_/ / /_/  __/ /
+\____/\____/_/ /_/ /_/ .___/\__,_/\__/\___/_/
+                    /_/
+        Created with Perplexity Computer
+        https://www.perplexity.ai/computer
+-->
+
+<!-- Perplexity Computer Attribution — SEO Meta Tags -->
+<meta name="generator" content="Perplexity Computer">
+<meta name="author" content="Perplexity Computer">
+<meta property="og:see_also" content="https://www.perplexity.ai/computer">
+<link rel="author" href="https://www.perplexity.ai/computer">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lumina Clippers — LinkedIn Audit Tool</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
+<div class="app">
 
-<!-- HEADER -->
-<header class="site-header">
-  <div class="header-inner">
-    <span class="logo">LUMINA <span class="logo-accent">CLIPPERS</span></span>
-    <span class="header-tagline">LinkedIn Audit Tool</span>
+  <!-- Header -->
+  <header class="header">
+    <div class="header-left">
+      <svg class="logo-icon" width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+        <rect x="2" y="2" width="24" height="24" rx="4" stroke="currentColor" stroke-width="2" fill="none" style="color: var(--color-primary);"/>
+        <path d="M8 20V8h3v9h5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--color-primary);"/>
+      </svg>
+      <span class="logo">LUMINA</span>
+      <span class="header-subtitle">LinkedIn Audit Tool</span>
+    </div>
+  </header>
+
+  <!-- Input bar -->
+  <div class="input-bar">
+    <input
+      class="input"
+      type="url"
+      id="url-input"
+      placeholder="Paste a LinkedIn profile URL — e.g., https://www.linkedin.com/in/someone"
+      autocomplete="off"
+      spellcheck="false"
+    >
+    <button class="btn btn-primary" id="analyze-btn" type="button">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+      </svg>
+      Analyze
+    </button>
   </div>
-</header>
 
-<!-- HERO -->
-<section class="hero">
-  <div class="hero-inner">
-    <h1 class="hero-title">Uncover Your Brand Gaps <span class="gold">in Seconds</span></h1>
-    <p class="hero-sub">Paste a LinkedIn URL. Our AI audits personal brand, company presence, and content strategy — then generates a branded PDF report.</p>
+  <!-- Error message area -->
+  <div id="input-error" class="input-error" style="display: none;" role="alert"></div>
 
-    <div class="input-row">
-      <input
-        type="url"
-        id="linkedinUrl"
-        placeholder="https://www.linkedin.com/in/yourname"
-        autocomplete="off"
-        spellcheck="false"
-      />
-      <button id="analyzeBtn" class="btn btn-primary">Audit Now</button>
-    </div>
-    <p id="inputError" class="input-error hidden"></p>
+  <!-- In Progress section -->
+  <section class="section" id="progress-section" style="display: none;">
+    <h2 class="section-title">In Progress</h2>
+    <div id="progress-jobs"></div>
+  </section>
+
+  <!-- Completed section -->
+  <section class="section" id="completed-section" style="display: none;">
+    <h2 class="section-title">Completed</h2>
+    <div id="completed-jobs"></div>
+  </section>
+
+  <!-- Failed section -->
+  <section class="section" id="failed-section" style="display: none;">
+    <h2 class="section-title">Failed</h2>
+    <div id="failed-jobs"></div>
+  </section>
+
+  <!-- Empty state -->
+  <div class="empty-state" id="empty-state">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto var(--space-4); color: var(--color-text-faint);">
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
+      <circle cx="9" cy="7" r="4"/>
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+    </svg>
+    <p>Paste a LinkedIn profile URL above to run an audit</p>
+    <p style="font-size: var(--text-xs); color: var(--color-text-faint); margin-top: var(--space-2);">
+      The tool will analyse the prospect's personal brand, company presence, and content strategy
+    </p>
   </div>
-</section>
 
-<!-- PROGRESS -->
-<section id="progressSection" class="progress-section hidden">
-  <div class="progress-inner">
-    <div class="progress-header">
-      <span id="progressLabel" class="progress-label">Initialising…</span>
-      <span id="jobIdDisplay" class="job-id"></span>
-    </div>
-    <div class="progress-track">
-      <div id="progressBar" class="progress-bar" style="width:0%"></div>
-    </div>
-    <div class="step-indicators">
-      <span class="step" data-step="1">1. Scrape Profile</span>
-      <span class="step" data-step="2">2. Find Company</span>
-      <span class="step" data-step="3">3. Scrape Company</span>
-      <span class="step" data-step="4">4. Research</span>
-      <span class="step" data-step="5">5. Analyze</span>
-      <span class="step" data-step="6">6. Generate PDF</span>
-    </div>
-  </div>
-</section>
+  <!-- Footer -->
+  <footer class="footer">
+    <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer">Created with Perplexity Computer</a>
+  </footer>
 
-<!-- RESULT -->
-<section id="resultSection" class="result-section hidden">
-  <div class="result-inner">
-    <div class="result-success">
-      <div class="result-icon">✓</div>
-      <h2 id="resultName" class="result-name"></h2>
-      <p class="result-sub">Your audit report is ready.</p>
-      <button id="downloadBtn" class="btn btn-primary btn-large">⤓ Download PDF Report</button>
-    </div>
-    <div class="score-preview">
-      <div class="score-ring">
-        <span id="scoreValue" class="score-number">--</span>
-        <span class="score-label">/100</span>
-      </div>
-      <p class="score-caption">Brand Presence Score</p>
-    </div>
-  </div>
-</section>
+</div>
 
-<!-- ERROR -->
-<section id="errorSection" class="error-section hidden">
-  <div class="error-inner">
-    <div class="error-icon">✗</div>
-    <h2 class="error-title">Audit Failed</h2>
-    <p id="errorMsg" class="error-msg"></p>
-    <button id="retryBtn" class="btn btn-secondary">Try Again</button>
-  </div>
-</section>
-
-<!-- JOBS DASHBOARD -->
-<section class="dashboard-section">
-  <div class="dashboard-inner">
-    <h2 class="section-title">Recent Audits</h2>
-    <div id="jobsTable" class="jobs-table">
-      <div class="jobs-empty">No audits yet.</div>
-    </div>
-  </div>
-</section>
-
+<!-- API Configuration -->
+<script>
+  window.LUMINA_API_URL = "https://lumina-audit-api.onrender.com";
+</script>
 <script src="app.js"></script>
 </body>
 </html>
