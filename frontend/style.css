@@ -1,0 +1,556 @@
+/* style.css — Lumina Clippers LinkedIn Audit Tool */
+
+/* ===================================================
+   RESET & BASE
+   =================================================== */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --bg:          #0D0D0D;
+  --bg-card:     #1A1A1A;
+  --bg-card-alt: #141414;
+  --bg-hover:    #222222;
+  --gold:        #C9A84C;
+  --gold-dim:    #8A7333;
+  --gold-glow:   rgba(201, 168, 76, 0.15);
+  --text:        #F0F0F0;
+  --text-muted:  #999999;
+  --text-faint:  #555555;
+  --border:      #2A2A2A;
+  --red:         #E74C3C;
+  --green:       #27AE60;
+  --amber:       #E89B2D;
+  --radius:      8px;
+  --radius-lg:   14px;
+  --font:        'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --transition:  0.18s ease;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--gold);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* ===================================================
+   HEADER
+   =================================================== */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(13, 13, 13, 0.92);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+
+.header-inner {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.logo {
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  text-transform: uppercase;
+}
+
+.logo-accent {
+  color: var(--gold);
+}
+
+.header-tagline {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  letter-spacing: 0.04em;
+}
+
+/* ===================================================
+   HERO
+   =================================================== */
+.hero {
+  padding: 72px 24px 48px;
+}
+
+.hero-inner {
+  max-width: 680px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.hero-title {
+  font-size: clamp(1.8rem, 5vw, 2.8rem);
+  font-weight: 800;
+  line-height: 1.18;
+  letter-spacing: -0.02em;
+  margin-bottom: 16px;
+}
+
+.gold {
+  color: var(--gold);
+}
+
+.hero-sub {
+  font-size: 1rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+  margin-bottom: 32px;
+  max-width: 540px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+/* ===================================================
+   INPUT ROW
+   =================================================== */
+.input-row {
+  display: flex;
+  gap: 10px;
+  max-width: 580px;
+  margin: 0 auto 12px;
+}
+
+#linkedinUrl {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 0.9rem;
+  padding: 12px 16px;
+  outline: none;
+  transition: border-color var(--transition);
+  font-family: var(--font);
+}
+
+#linkedinUrl:focus {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px var(--gold-glow);
+}
+
+#linkedinUrl::placeholder {
+  color: var(--text-faint);
+}
+
+.input-error {
+  font-size: 0.82rem;
+  color: var(--red);
+  margin-top: 6px;
+}
+
+/* ===================================================
+   BUTTONS
+   =================================================== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-family: var(--font);
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-radius: var(--radius);
+  padding: 12px 22px;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+
+.btn-primary {
+  background: var(--gold);
+  color: #0D0D0D;
+}
+
+.btn-primary:hover {
+  background: #d4b060;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(201, 168, 76, 0.3);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-primary:disabled {
+  background: var(--gold-dim);
+  color: #555;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-secondary {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1.5px solid var(--border);
+}
+
+.btn-secondary:hover {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.btn-large {
+  font-size: 1rem;
+  padding: 14px 32px;
+  border-radius: var(--radius-lg);
+}
+
+/* ===================================================
+   PROGRESS SECTION
+   =================================================== */
+.progress-section {
+  padding: 0 24px 48px;
+}
+
+.progress-inner {
+  max-width: 580px;
+  margin: 0 auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+}
+
+.progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.progress-label {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--gold);
+}
+
+.job-id {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  font-family: monospace;
+}
+
+.progress-track {
+  height: 6px;
+  background: var(--bg-card-alt);
+  border-radius: 99px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold-dim), var(--gold));
+  border-radius: 99px;
+  transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.step-indicators {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.step {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  background: var(--bg-card-alt);
+  border: 1px solid var(--border);
+  border-radius: 99px;
+  padding: 3px 10px;
+  transition: all var(--transition);
+}
+
+.step.active {
+  color: var(--gold);
+  border-color: var(--gold);
+  background: var(--gold-glow);
+}
+
+.step.done {
+  color: var(--green);
+  border-color: var(--green);
+  background: rgba(39, 174, 96, 0.08);
+}
+
+/* ===================================================
+   RESULT SECTION
+   =================================================== */
+.result-section {
+  padding: 0 24px 48px;
+}
+
+.result-inner {
+  max-width: 580px;
+  margin: 0 auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 36px;
+  display: flex;
+  gap: 32px;
+  align-items: center;
+}
+
+.result-success {
+  flex: 1;
+}
+
+.result-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(39, 174, 96, 0.12);
+  border: 2px solid var(--green);
+  color: var(--green);
+  font-size: 1.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+
+.result-name {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.result-sub {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.score-preview {
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.score-ring {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  border: 3px solid var(--gold);
+  background: var(--bg-card-alt);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 8px;
+}
+
+.score-number {
+  font-size: 1.9rem;
+  font-weight: 800;
+  color: var(--gold);
+  line-height: 1;
+}
+
+.score-label {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.score-caption {
+  font-size: 0.72rem;
+  color: var(--text-faint);
+}
+
+/* ===================================================
+   ERROR SECTION
+   =================================================== */
+.error-section {
+  padding: 0 24px 48px;
+}
+
+.error-inner {
+  max-width: 580px;
+  margin: 0 auto;
+  background: var(--bg-card);
+  border: 1px solid rgba(231, 76, 60, 0.3);
+  border-radius: var(--radius-lg);
+  padding: 36px;
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 2rem;
+  color: var(--red);
+  margin-bottom: 12px;
+}
+
+.error-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.error-msg {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+/* ===================================================
+   DASHBOARD
+   =================================================== */
+.dashboard-section {
+  padding: 0 24px 80px;
+}
+
+.dashboard-inner {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.section-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.jobs-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.jobs-empty {
+  font-size: 0.88rem;
+  color: var(--text-faint);
+  padding: 24px 0;
+  text-align: center;
+}
+
+.job-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 16px;
+  align-items: center;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px 18px;
+  transition: border-color var(--transition);
+}
+
+.job-row:hover {
+  border-color: var(--gold-dim);
+}
+
+.job-name {
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.job-url {
+  font-size: 0.75rem;
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.job-score {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--gold);
+  white-space: nowrap;
+}
+
+.job-status {
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 99px;
+  white-space: nowrap;
+}
+
+.status-complete   { background: rgba(39,174,96,0.12); color: var(--green); border: 1px solid rgba(39,174,96,0.3); }
+.status-failed     { background: rgba(231,76,60,0.10); color: var(--red);   border: 1px solid rgba(231,76,60,0.3); }
+.status-queued     { background: var(--bg-card-alt);   color: var(--text-muted); border: 1px solid var(--border); }
+.status-scraping   { background: rgba(201,168,76,0.08); color: var(--gold-dim); border: 1px solid rgba(201,168,76,0.2); }
+.status-researching{ background: rgba(201,168,76,0.08); color: var(--gold-dim); border: 1px solid rgba(201,168,76,0.2); }
+.status-analyzing  { background: rgba(201,168,76,0.08); color: var(--gold-dim); border: 1px solid rgba(201,168,76,0.2); }
+.status-generating { background: rgba(201,168,76,0.08); color: var(--gold-dim); border: 1px solid rgba(201,168,76,0.2); }
+
+.job-download-btn {
+  font-size: 0.78rem;
+  padding: 5px 14px;
+  border-radius: var(--radius);
+}
+
+/* ===================================================
+   UTILITIES
+   =================================================== */
+.hidden {
+  display: none !important;
+}
+
+/* ===================================================
+   RESPONSIVE
+   =================================================== */
+@media (max-width: 600px) {
+  .input-row {
+    flex-direction: column;
+  }
+
+  .result-inner {
+    flex-direction: column;
+    text-align: center;
+  }
+
+  .job-row {
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+  }
+
+  .job-score, .job-download-btn {
+    grid-column: 2;
+  }
+
+  .job-status {
+    grid-column: 1;
+  }
+}
