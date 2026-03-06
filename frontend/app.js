@@ -1,5 +1,5 @@
 // API base URL — routes through port-forwarded backend
-const API = "";
+const API = "https://lumina-audit-api.onrender.com";
 
 // Form submission handler
 document.getElementById("audit-form").addEventListener("submit", async (e) => {
