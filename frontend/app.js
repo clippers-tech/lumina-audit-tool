@@ -1,5 +1,5 @@
 // API base URL — routes through port-forwarded backend
-const API = "__PORT_8000__";
+const API = "";
 
 // Form submission handler
 document.getElementById("audit-form").addEventListener("submit", async (e) => {
