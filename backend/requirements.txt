@@ -5,3 +5,4 @@ anthropic
 reportlab
 python-dotenv
 resend
+email-validator

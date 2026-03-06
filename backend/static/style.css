@@ -1,0 +1,553 @@
+/* ============================================
+   LUMINA CLIPPERS — Marketing Audit Tool
+   Premium Dark Theme with Gold Accents
+   ============================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* ---- Custom Properties ---- */
+:root {
+  /* Colors */
+  --color-bg:          #0A0A0A;
+  --color-surface-1:   #111111;
+  --color-surface-2:   #181818;
+  --color-border:      #2A2A2A;
+  --color-gold:        #C9A84C;
+  --color-gold-hover:  #D4B86A;
+  --color-gold-dim:    rgba(201, 168, 76, 0.15);
+  --color-text:        #E8E8E8;
+  --color-muted:       #888888;
+  --color-faint:       #555555;
+  --color-success:     #27AE60;
+  --color-error:       #E74C3C;
+  --color-error-bg:    rgba(231, 76, 60, 0.12);
+
+  /* Typography */
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+
+  /* Type scale */
+  --text-xs:   clamp(11px, 1.8vw, 12px);
+  --text-sm:   clamp(13px, 2vw, 14px);
+  --text-base: clamp(14px, 2.2vw, 16px);
+  --text-lg:   clamp(18px, 3vw, 22px);
+  --text-xl:   clamp(22px, 4vw, 28px);
+  --text-2xl:  clamp(28px, 5vw, 36px);
+
+  /* Spacing (4px base) */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* UI */
+  --radius-sm:     6px;
+  --radius-md:     10px;
+  --radius-lg:     14px;
+  --input-height:  48px;
+  --btn-height:    48px;
+  --max-width:     640px;
+
+  /* Easing */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---- Reset & Base ---- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  color: var(--color-text);
+  background-color: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- App Container ---- */
+.app {
+  max-width: var(--max-width);
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 var(--space-5);
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- Skip nav for accessibility ---- */
+.skip-nav {
+  position: absolute;
+  left: -9999px;
+  top: var(--space-2);
+  z-index: 999;
+  padding: var(--space-2) var(--space-4);
+  background: var(--color-gold);
+  color: #0A0A0A;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  font-size: var(--text-sm);
+}
+.skip-nav:focus {
+  left: var(--space-4);
+}
+
+/* ---- Header ---- */
+.site-header {
+  padding: var(--space-6) 0 var(--space-8);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.logo-link {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  text-decoration: none;
+  color: inherit;
+}
+
+.logo-mark {
+  flex-shrink: 0;
+  display: block;
+}
+
+.logo-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.logo-name {
+  font-size: var(--text-lg);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--color-text);
+}
+
+.logo-sub {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  color: var(--color-gold);
+  text-transform: uppercase;
+}
+
+/* ---- Main Content ---- */
+main {
+  flex: 1;
+  padding-bottom: var(--space-12);
+}
+
+/* ---- Hero Heading ---- */
+.page-title {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--color-text);
+  margin-bottom: var(--space-4);
+}
+
+.page-title .accent {
+  color: var(--color-gold);
+}
+
+.subheadline {
+  font-size: var(--text-base);
+  line-height: 1.7;
+  color: var(--color-muted);
+  margin-bottom: var(--space-8);
+  max-width: 58ch;
+}
+
+/* ---- Form ---- */
+#audit-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.form-section {
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.section-label {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-gold);
+  margin-bottom: var(--space-1);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.hint {
+  font-size: var(--text-xs);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--color-muted);
+}
+
+/* ---- Form Fields ---- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+label {
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text);
+  display: block;
+}
+
+label .optional-badge {
+  font-size: var(--text-xs);
+  font-weight: 400;
+  color: var(--color-faint);
+  margin-left: var(--space-1);
+}
+
+input[type="text"],
+input[type="email"],
+input[type="url"],
+select {
+  width: 100%;
+  height: var(--input-height);
+  padding: 0 var(--space-4);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  outline: none;
+  transition: border-color 180ms var(--ease-out),
+              box-shadow 180ms var(--ease-out),
+              background 180ms var(--ease-out);
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+input::placeholder,
+select option[value=""] {
+  color: var(--color-faint);
+}
+
+input:focus,
+select:focus {
+  border-color: var(--color-gold);
+  box-shadow: 0 0 0 3px var(--color-gold-dim);
+  background: #1C1C1C;
+}
+
+input:hover:not(:focus),
+select:hover:not(:focus) {
+  border-color: var(--color-faint);
+}
+
+/* Select dropdown */
+.select-wrapper {
+  position: relative;
+}
+
+.select-wrapper select {
+  padding-right: var(--space-10);
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.select-wrapper select option {
+  background: var(--color-surface-2);
+  color: var(--color-text);
+}
+
+/* Custom chevron */
+.select-wrapper::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 6px;
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  background: var(--color-muted);
+  pointer-events: none;
+  transition: background 180ms var(--ease-out);
+}
+
+.select-wrapper:focus-within::after {
+  background: var(--color-gold);
+}
+
+/* ---- Submit Button ---- */
+.btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: var(--btn-height);
+  padding: 0 var(--space-6);
+  background: var(--color-gold);
+  color: #0A0A0A;
+  font-family: var(--font-body);
+  font-size: var(--text-sm);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 180ms var(--ease-out),
+              transform 120ms var(--ease-out),
+              box-shadow 180ms var(--ease-out);
+  position: relative;
+  overflow: hidden;
+  margin-top: var(--space-2);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-gold-hover);
+  box-shadow: 0 4px 20px rgba(201, 168, 76, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-primary:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.btn-primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+/* Loading state */
+.btn-primary.loading .btn-text {
+  opacity: 0;
+}
+
+.btn-primary.loading::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(10, 10, 10, 0.3);
+  border-top-color: #0A0A0A;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Button icon */
+.btn-icon {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+/* ---- Trust Signals ---- */
+.trust-signals {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  padding-top: var(--space-4);
+}
+
+.trust-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  font-weight: 500;
+}
+
+.trust-check {
+  color: var(--color-success);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* ---- Error Message ---- */
+.error-msg {
+  background: var(--color-error-bg);
+  border: 1px solid rgba(231, 76, 60, 0.3);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--color-error);
+  font-weight: 500;
+  margin-top: var(--space-2);
+  display: none;
+}
+
+/* ---- Confirm Screen ---- */
+.confirm-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--space-12) 0 var(--space-16);
+  gap: var(--space-5);
+}
+
+.confirm-icon {
+  font-size: 64px;
+  line-height: 1;
+  margin-bottom: var(--space-2);
+  filter: drop-shadow(0 4px 16px rgba(201, 168, 76, 0.3));
+}
+
+.confirm-screen h1 {
+  font-size: var(--text-2xl);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
+.confirm-screen .confirm-body {
+  font-size: var(--text-base);
+  color: var(--color-muted);
+  line-height: 1.7;
+  max-width: 48ch;
+}
+
+.confirm-screen .confirm-body strong {
+  color: var(--color-gold);
+  font-weight: 600;
+}
+
+.confirm-screen .tip {
+  font-size: var(--text-sm);
+  color: var(--color-faint);
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-5);
+}
+
+.confirm-screen .btn-primary {
+  max-width: 360px;
+  margin-top: var(--space-3);
+  height: 52px;
+  font-size: var(--text-base);
+}
+
+.btn-calendly {
+  background: transparent !important;
+  border: 1.5px solid var(--color-gold) !important;
+  color: var(--color-gold) !important;
+}
+
+.btn-calendly:hover:not(:disabled) {
+  background: var(--color-gold-dim) !important;
+  box-shadow: 0 4px 20px rgba(201, 168, 76, 0.15) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* ---- Divider ---- */
+.confirm-divider {
+  width: 48px;
+  height: 1px;
+  background: var(--color-border);
+  margin: var(--space-2) 0;
+}
+
+/* ---- Footer ---- */
+.site-footer {
+  padding: var(--space-6) 0;
+  border-top: 1px solid var(--color-border);
+  text-align: center;
+}
+
+.site-footer p {
+  font-size: var(--text-xs);
+  color: var(--color-faint);
+}
+
+.site-footer a {
+  color: var(--color-muted);
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 180ms var(--ease-out);
+}
+
+.site-footer a:hover {
+  color: var(--color-gold);
+}
+
+/* ---- Mobile Responsiveness ---- */
+@media (max-width: 480px) {
+  .app {
+    padding: 0 var(--space-4);
+  }
+
+  .site-header {
+    padding: var(--space-5) 0 var(--space-6);
+  }
+
+  .form-section {
+    padding: var(--space-5);
+    gap: var(--space-3);
+  }
+
+  .trust-signals {
+    gap: var(--space-4);
+  }
+
+  .confirm-screen {
+    padding: var(--space-8) 0 var(--space-10);
+  }
+
+  .confirm-icon {
+    font-size: 52px;
+  }
+}
+
+@media (max-width: 375px) {
+  .trust-signals {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+}

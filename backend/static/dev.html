@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lumina Clippers — Pipeline Monitor</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #0a0a0a;
+    color: #e0e0e0;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+
+  .container { max-width: 720px; margin: 0 auto; }
+
+  header {
+    display: flex; align-items: center; gap: 0.75rem;
+    margin-bottom: 2rem; padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+  header .badge {
+    background: #c9a84c; color: #0a0a0a;
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 3px; letter-spacing: 0.5px;
+  }
+  header h1 { font-size: 1.1rem; font-weight: 600; color: #fff; }
+
+  .jobs-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 1rem;
+  }
+  .jobs-header h2 { font-size: 0.85rem; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
+  .jobs-header .refresh-hint { font-size: 0.75rem; color: #555; }
+
+  .job-card {
+    background: #111; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px; padding: 1.25rem; margin-bottom: 0.75rem;
+    cursor: pointer; transition: border-color 0.2s;
+  }
+  .job-card:hover { border-color: rgba(201,168,76,0.3); }
+  .job-card.active { border-color: #c9a84c; }
+
+  .job-card .top-row {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 0.5rem;
+  }
+  .job-card .name { font-weight: 600; color: #fff; font-size: 0.95rem; }
+  .job-card .status-badge {
+    font-size: 0.7rem; font-weight: 600; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 3px; letter-spacing: 0.3px;
+  }
+  .status-queued { background: #333; color: #888; }
+  .status-running { background: rgba(59,130,246,0.15); color: #60a5fa; }
+  .status-complete { background: rgba(34,197,94,0.15); color: #4ade80; }
+  .status-failed { background: rgba(239,68,68,0.15); color: #f87171; }
+
+  .job-card .meta { font-size: 0.8rem; color: #666; }
+  .job-card .meta span { margin-right: 1rem; }
+
+  .progress-section {
+    background: #111; border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px; padding: 1.5rem; margin-top: 1.5rem;
+  }
+  .progress-section h3 {
+    font-size: 0.85rem; font-weight: 600; color: #888;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 1.25rem;
+  }
+
+  .step {
+    display: grid; grid-template-columns: 32px 1fr;
+    align-items: start; gap: 0.75rem;
+    padding: 0.65rem 0;
+  }
+  .step:not(:last-child) { border-bottom: 1px solid rgba(255,255,255,0.04); }
+
+  .step-indicator {
+    width: 28px; height: 28px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; font-weight: 700;
+    border: 2px solid #333; color: #555; background: transparent;
+    transition: all 0.3s;
+    flex-shrink: 0;
+  }
+  .step.done .step-indicator { border-color: #4ade80; color: #4ade80; background: rgba(34,197,94,0.1); }
+  .step.active .step-indicator {
+    border-color: #c9a84c; color: #c9a84c; background: rgba(201,168,76,0.1);
+    animation: pulse-ring 1.5s infinite;
+  }
+  .step.waiting .step-indicator { border-color: #333; color: #555; }
+  .step.failed .step-indicator { border-color: #f87171; color: #f87171; background: rgba(239,68,68,0.1); }
+
+  @keyframes pulse-ring {
+    0% { box-shadow: 0 0 0 0 rgba(201,168,76,0.3); }
+    70% { box-shadow: 0 0 0 6px rgba(201,168,76,0); }
+    100% { box-shadow: 0 0 0 0 rgba(201,168,76,0); }
+  }
+
+  .step-label { font-size: 0.85rem; font-weight: 500; color: #ccc; }
+  .step.active .step-label { color: #fff; }
+  .step.waiting .step-label { color: #666; }
+  .step-detail { font-size: 0.75rem; color: #777; margin-top: 2px; line-height: 1.4; }
+  .step.active .step-detail { color: #aaa; }
+
+  .data-panel {
+    margin-top: 1.25rem; padding-top: 1.25rem;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .data-panel h4 {
+    font-size: 0.75rem; font-weight: 600; color: #666;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 0.75rem;
+  }
+  .data-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .data-item { background: #0a0a0a; border-radius: 6px; padding: 0.75rem; }
+  .data-item .label { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 0.3px; }
+  .data-item .value { font-size: 1rem; font-weight: 600; color: #fff; margin-top: 2px; }
+  .data-item .value.gold { color: #c9a84c; }
+  .data-item .value.green { color: #4ade80; }
+  .data-item .value.red { color: #f87171; }
+
+  .empty-state { text-align: center; padding: 3rem; color: #555; font-size: 0.85rem; }
+
+  .error-msg {
+    background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2);
+    border-radius: 6px; padding: 0.75rem; margin-top: 1rem;
+    font-size: 0.8rem; color: #f87171; word-break: break-word;
+  }
+
+  .download-bar {
+    margin-top: 1.25rem; padding-top: 1.25rem;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .download-btn {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    background: #c9a84c; color: #0a0a0a;
+    font-size: 0.8rem; font-weight: 600;
+    padding: 0.6rem 1.25rem; border-radius: 6px;
+    text-decoration: none; border: none; cursor: pointer;
+    transition: background 0.2s, transform 0.15s;
+  }
+  .download-btn:hover { background: #d4b65e; transform: translateY(-1px); }
+  .download-btn:active { transform: translateY(0); }
+  .download-btn svg { width: 16px; height: 16px; fill: currentColor; }
+  .download-hint { font-size: 0.75rem; color: #555; }
+
+  .terms-panel {
+    margin-top: 1.25rem; padding-top: 1.25rem;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .terms-panel h4 {
+    font-size: 0.75rem; font-weight: 600; color: #666;
+    text-transform: uppercase; letter-spacing: 0.5px;
+    margin-bottom: 0.75rem;
+  }
+  .terms-panel .brand-summary {
+    font-size: 0.8rem; color: #aaa; line-height: 1.5;
+    margin-bottom: 1rem; padding: 0.75rem;
+    background: rgba(201,168,76,0.05); border-radius: 6px;
+    border-left: 3px solid #c9a84c;
+  }
+  .terms-list { display: flex; flex-direction: column; gap: 0.5rem; }
+  .term-row {
+    display: flex; align-items: baseline; gap: 0.75rem;
+    padding: 0.5rem 0.75rem; background: #0a0a0a; border-radius: 6px;
+  }
+  .term-platform {
+    font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.5px; color: #555; min-width: 72px; flex-shrink: 0;
+  }
+  .term-platform.yt { color: #f87171; }
+  .term-platform.tt { color: #e0e0e0; }
+  .term-platform.ig { color: #e879a8; }
+  .term-platform.x { color: #60a5fa; }
+  .term-platform.primary { color: #c9a84c; }
+  .term-query {
+    font-size: 0.8rem; color: #ccc; font-family: 'SF Mono', 'Fira Code', monospace;
+    word-break: break-all;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <span class="badge">Dev</span>
+    <h1>Pipeline Monitor</h1>
+  </header>
+
+  <div class="jobs-header">
+    <h2>Audit Jobs</h2>
+    <span class="refresh-hint">Auto-refreshes every 3s</span>
+  </div>
+
+  <div id="jobs-list">
+    <div class="empty-state">Loading jobs...</div>
+  </div>
+
+  <div id="detail-section" style="display:none;">
+    <div class="progress-section">
+      <h3 id="detail-title">Pipeline Progress</h3>
+      <div id="steps-container"></div>
+      <div id="error-container"></div>
+    </div>
+
+    <div class="data-panel" id="data-panel" style="display:none;">
+      <h4>Live Data</h4>
+      <div class="data-grid" id="data-grid"></div>
+    </div>
+
+    <div id="terms-panel" class="terms-panel" style="display:none;">
+      <h4>Search Terms Used</h4>
+      <div id="brand-summary"></div>
+      <div id="terms-list" class="terms-list"></div>
+    </div>
+
+    <div id="download-bar" class="download-bar" style="display:none;"></div>
+  </div>
+</div>
+
+<script>
+const API = "__PORT_8000__";
+let selectedJobId = null;
+
+const STEPS = [
+  { num: 1, key: "scraping_identity",   label: "Scraping Profiles",        desc: "LinkedIn, YouTube, TikTok, Instagram, X" },
+  { num: 2, key: "deriving_terms",      label: "Deriving Search Terms",    desc: "Claude generating platform-specific queries" },
+  { num: 3, key: "searching_platforms", label: "Searching Platforms",       desc: "YouTube, TikTok, Instagram, X brand mentions" },
+  { num: 4, key: "researching",         label: "Researching Competitors",  desc: "Perplexity: competitor revenue + industry CPM" },
+  { num: 5, key: "analyzing",           label: "AI Audit Analysis",        desc: "Claude: scores, gaps, recommendations" },
+  { num: 6, key: "generating",          label: "Generating PDF",           desc: "ReportLab rendering branded report" },
+  { num: 7, key: "sending",             label: "Sending Email",            desc: "PDF to prospect + internal notification" },
+];
+
+async function fetchAllJobs() {
+  try {
+    const resp = await fetch(API + "/api/jobs");
+    if (!resp.ok) return [];
+    return await resp.json();
+  } catch { return []; }
+}
+
+function renderJobList(jobs) {
+  const container = document.getElementById("jobs-list");
+
+  if (!jobs.length) {
+    container.innerHTML = '<div class="empty-state">No jobs yet. Submit an audit from the main form.</div>';
+    return;
+  }
+
+  // Sort newest first
+  jobs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+  container.innerHTML = jobs.map(job => {
+    const isActive = job.id === selectedJobId;
+    const sc = statusClass(job.status);
+    const sl = statusLabel(job.status, job.step);
+    const t = new Date(job.created_at).toLocaleTimeString();
+
+    return '<div class="job-card' + (isActive ? ' active' : '') + '" data-id="' + job.id + '">'
+      + '<div class="top-row">'
+      + '<span class="name">' + esc(job.full_name || "Unknown") + ' — ' + esc(job.company_name || "") + '</span>'
+      + '<span class="status-badge ' + sc + '">' + sl + '</span>'
+      + '</div>'
+      + '<div class="meta"><span>' + t + '</span><span>' + esc(job.industry || "") + '</span><span>' + job.id.substring(0, 8) + '...</span></div>'
+      + '</div>';
+  }).join("");
+
+  container.querySelectorAll(".job-card").forEach(card => {
+    card.addEventListener("click", () => selectJob(card.dataset.id, jobs));
+  });
+}
+
+function statusClass(s) {
+  if (s === "complete") return "status-complete";
+  if (s === "failed") return "status-failed";
+  if (s === "queued") return "status-queued";
+  return "status-running";
+}
+
+function statusLabel(s, step) {
+  if (s === "complete") return "Complete";
+  if (s === "failed") return "Failed";
+  if (s === "queued") return "Queued";
+  return "Step " + step + "/7";
+}
+
+function selectJob(id, jobs) {
+  selectedJobId = id;
+  var job = jobs.find(j => j.id === id);
+  if (job) renderDetail(job);
+  renderJobList(jobs);
+}
+
+function renderDetail(job) {
+  document.getElementById("detail-section").style.display = "block";
+  document.getElementById("detail-title").textContent = "Pipeline — " + (job.full_name || job.id.substring(0,8));
+
+  var cur = job.step || 0;
+  var isDone = job.status === "complete";
+  var isFailed = job.status === "failed";
+
+  var html = "";
+  for (var i = 0; i < STEPS.length; i++) {
+    var s = STEPS[i];
+    var state = "waiting";
+    if (isDone) state = "done";
+    else if (isFailed && s.num === cur) state = "failed";
+    else if (s.num < cur) state = "done";
+    else if (s.num === cur) state = "active";
+
+    var icon = s.num;
+    if (state === "done") icon = "\u2713";
+    else if (state === "failed") icon = "\u2715";
+    else if (state === "active") icon = "\u25CF";
+
+    html += '<div class="step ' + state + '">'
+      + '<div class="step-indicator">' + icon + '</div>'
+      + '<div><div class="step-label">' + s.label + '</div>'
+      + '<div class="step-detail">' + s.desc + '</div></div>'
+      + '</div>';
+  }
+  document.getElementById("steps-container").innerHTML = html;
+
+  // Error
+  var ec = document.getElementById("error-container");
+  ec.innerHTML = (isFailed && job.error_msg) ? '<div class="error-msg">' + esc(job.error_msg) + '</div>' : "";
+
+  // Download PDF
+  var dlBar = document.getElementById("download-bar");
+  if (isDone) {
+    var dlUrl = API + "/api/download/" + job.id;
+    dlBar.style.display = "flex";
+    dlBar.innerHTML = '<a class="download-btn" href="' + dlUrl + '" target="_blank" rel="noopener">'
+      + '<svg viewBox="0 0 24 24"><path d="M12 16l-5-5h3V4h4v7h3l-5 5zm-7 2h14v2H5v-2z"/></svg>'
+      + 'Download PDF'
+      + '</a>'
+      + '<span class="download-hint">Opens audit report in new tab</span>';
+  } else {
+    dlBar.style.display = "none";
+    dlBar.innerHTML = "";
+  }
+
+  // Data
+  var dp = document.getElementById("data-panel");
+  var dg = document.getElementById("data-grid");
+  var items = [];
+
+  if (job.person_name) items.push(["Person", job.person_name, ""]);
+  if (job.combined_views_48h != null) items.push(["Views (48h)", Number(job.combined_views_48h).toLocaleString(), "gold"]);
+  if (job.visibility_score != null) {
+    var vs = job.visibility_score;
+    items.push(["Visibility", vs + "/100", vs >= 50 ? "green" : vs >= 25 ? "gold" : "red"]);
+  }
+  if (job.lumina_fit_score != null) items.push(["Fit Score", job.lumina_fit_score + "/100", "gold"]);
+  if (job.competitor_revenue) items.push(["Competitor Rev", job.competitor_revenue.substring(0, 50), ""]);
+  // Search Terms panel
+  var termsPanel = document.getElementById("terms-panel");
+  var brandSummaryEl = document.getElementById("brand-summary");
+  var termsListEl = document.getElementById("terms-list");
+  if (job.search_terms) {
+    try {
+      var terms = typeof job.search_terms === "string" ? JSON.parse(job.search_terms) : job.search_terms;
+      termsPanel.style.display = "block";
+
+      // Brand summary
+      if (terms.brand_summary) {
+        brandSummaryEl.innerHTML = '<div class="brand-summary">' + esc(terms.brand_summary) + '</div>';
+      } else {
+        brandSummaryEl.innerHTML = "";
+      }
+
+      // Platform queries
+      var platforms = [
+        { key: "primary_search", label: "Primary", cls: "primary" },
+        { key: "youtube_query", label: "YouTube", cls: "yt" },
+        { key: "tiktok_query", label: "TikTok", cls: "tt" },
+        { key: "instagram_query", label: "Instagram", cls: "ig" },
+        { key: "x_query", label: "X / Twitter", cls: "x" },
+      ];
+      var termsHtml = "";
+      platforms.forEach(function(p) {
+        if (terms[p.key]) {
+          termsHtml += '<div class="term-row">'
+            + '<span class="term-platform ' + p.cls + '">' + p.label + '</span>'
+            + '<span class="term-query">' + esc(terms[p.key]) + '</span>'
+            + '</div>';
+        }
+      });
+      termsListEl.innerHTML = termsHtml;
+    } catch(e) {
+      termsPanel.style.display = "none";
+    }
+  } else {
+    termsPanel.style.display = "none";
+  }
+
+  if (items.length) {
+    dp.style.display = "block";
+    dg.innerHTML = items.map(function(it) {
+      return '<div class="data-item"><div class="label">' + it[0] + '</div><div class="value ' + it[2] + '">' + esc(it[1]) + '</div></div>';
+    }).join("");
+  } else {
+    dp.style.display = "none";
+  }
+}
+
+function esc(s) {
+  var d = document.createElement("div");
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// Auto-select newest running job on first load if none selected
+var firstLoad = true;
+
+async function poll() {
+  var jobs = await fetchAllJobs();
+  renderJobList(jobs);
+
+  // Auto-select on first load or if the selected job doesn't exist
+  if (jobs.length && (firstLoad || !selectedJobId)) {
+    // Pick newest running job, or just newest
+    var running = jobs.filter(j => j.status !== "complete" && j.status !== "failed");
+    var pick = running.length ? running[0] : jobs[0];
+    selectedJobId = pick.id;
+    firstLoad = false;
+  }
+
+  if (selectedJobId) {
+    var job = jobs.find(j => j.id === selectedJobId);
+    if (job) renderDetail(job);
+  }
+}
+
+poll();
+setInterval(poll, 3000);
+</script>
+</body>
+</html>
