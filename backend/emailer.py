@@ -8,7 +8,7 @@ RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "Lumina Clippers <audits@openclawagency.ai>")
 REPLY_TO_EMAIL = os.environ.get("REPLY_TO_EMAIL", "rhys@luminaclippers.com")
 INTERNAL_NOTIFY_EMAIL = os.environ.get("INTERNAL_NOTIFY_EMAIL", "rhys@luminaclippers.com")
-CALENDLY_URL = os.environ.get("CALENDLY_URL", "https://calendly.com/openclawagency/30min")
+CALENDLY_URL = os.environ.get("CALENDLY_URL", "https://calendly.com/d/ctgd-j5q-7j6/lumina-clippers-growth-opportunities")
 
 
 def _init_resend():
