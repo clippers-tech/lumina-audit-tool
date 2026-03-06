@@ -114,7 +114,7 @@ Use this priority:
    Use rough heuristics: small niche brand = $200k–$1M, mid-size = $1M–$10M, large = $10M+.
 
 Format as a clean dollar string: "~$3.75M", "~$1.2M", "~$800k" (use ~ prefix for estimates). No caveats in the value.
-The "competitor_revenue_is_estimate" boolean field tells the PDF renderer to label it as "Est.""""
+The "competitor_revenue_is_estimate" boolean field tells the PDF renderer to label it as estimated."""
 
 
 async def analyze(
