@@ -49,7 +49,7 @@ CONTENT_W = PAGE_W - 2 * MARGIN
 _ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
 _IMG_VOUCH  = os.path.join(_ASSETS_DIR, "vouch_dashboard.jpg")
 _IMG_WALL   = os.path.join(_ASSETS_DIR, "client_wall.jpg")
-_IMG_LOGO   = os.path.join(_ASSETS_DIR, "lumina_clippers_logo.jpg")
+_IMG_LOGO   = os.path.join(_ASSETS_DIR, "lumina_clippers_logo.png")
 
 
 # ───────────────────── Page background + footer ──────────
