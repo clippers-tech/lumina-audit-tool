@@ -401,10 +401,16 @@ def _page4_revenue(story, audit, styles):
     own_rev_str  = _safe(rev, "own_revenue", default="$0")
     comp_name    = _safe(rev, "competitor_name", default="Competitor")
     comp_rev_str = _safe(rev, "competitor_revenue", default="$0")
+    is_estimate  = rev.get("competitor_revenue_is_estimate", False)
+
+    # Fallback: if competitor_revenue is still N/A or empty, show ~$0
+    if not comp_rev_str or comp_rev_str.upper() in ("N/A", "NOT AVAILABLE", ""):
+        comp_rev_str = "~$0"
+        is_estimate = True
 
     def _parse_dollar(s):
         try:
-            s = str(s).replace("$","").replace(",","").replace("/yr","").replace("/year","").strip()
+            s = str(s).replace("$","").replace(",","").replace("/yr","").replace("/year","").replace("~","").strip()
             if "m" in s.lower() or "M" in s:
                 s = s.lower().replace("m","").strip()
                 return float(s) * 1_000_000
@@ -443,7 +449,7 @@ def _page4_revenue(story, audit, styles):
         ("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),
     ]))
     right = Table([
-        [Paragraph(f"{comp_name.upper()} REVENUE", styles["card_label"])],
+        [Paragraph(f"{comp_name.upper()} REVENUE{' (Est.)' if is_estimate else ''}", styles["card_label"])],
         [Paragraph(str(comp_rev_str), styles["card_gold"])],
     ], colWidths=[half])
     right.setStyle(TableStyle([

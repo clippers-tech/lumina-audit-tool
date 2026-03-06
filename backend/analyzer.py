@@ -74,7 +74,8 @@ Return ONLY valid JSON matching this exact schema — no markdown, no code fence
     "revenue_comparison": {
         "own_revenue": "string — as submitted, e.g. $500k",
         "competitor_name": "string",
-        "competitor_revenue": "string — from research, e.g. $2M",
+        "competitor_revenue": "string — ALWAYS a dollar estimate, NEVER N/A (see estimation rules)",
+        "competitor_revenue_is_estimate": bool,
         "own_views_48h": int,
         "competitor_views_48h": int
     },
@@ -89,12 +90,31 @@ Return ONLY valid JSON matching this exact schema — no markdown, no code fence
 Rules:
 - visibility_score and lumina_fit_score are independent scores
 - their_total_views_48h = sum of platform views (after noise stripping)
-- competitor views should reflect real data from search results
+- competitor views should reflect real data from search results. If no competitor search data exists, estimate based on their social following and industry benchmarks
 - own_views_48h and competitor_views_48h in revenue_comparison should match visibility totals
 - meta_cpm: use real industry average data (research provided). If unknown, estimate based on industry.
 - clipping_cpm: Lumina's performance-based model typically delivers $0.50-$1.50 CPM
 - lumina_pitch: personalised, reference their specific visibility gap and competitor. No fluff.
-- Keep ALL text minimal — this is a dashboard PDF, not a report. Numbers speak."""
+- Keep ALL text minimal — this is a dashboard PDF, not a report. Numbers speak.
+
+## CRITICAL: Competitor Revenue Estimation (NEVER show N/A)
+competitor_revenue MUST always be a dollar figure — NEVER "N/A", "Not available", or empty.
+This is a ROUGH ESTIMATE and that's fine — prospects understand it's directional.
+
+Use this priority:
+1. If Perplexity research found a real revenue figure → use it. Set "competitor_revenue_is_estimate": false.
+2. If no real data AND the prospect provided their own revenue → ESTIMATE. Set "competitor_revenue_is_estimate": true.
+   Use the view ratio as a starting point: competitor_revenue_est = own_revenue × (competitor_views_48h / own_views_48h)
+   BUT apply these safeguards:
+   - If the audited brand has near-zero views (< 500), they likely rely on ads, not organic social. Do NOT extrapolate to absurd multiples.
+     Instead, estimate the competitor's revenue using their follower counts, industry size, and known benchmarks.
+   - CAP the estimate: competitor revenue should never exceed 50× the brand's own revenue. If the math gives $50M but the brand reports $100k, something is off — use industry context to pick a reasonable figure.
+   - For small/medium businesses, keep estimates grounded: $200k–$10M range is typical. Only go higher for clearly large brands.
+3. If NEITHER real data NOR own_revenue is available → estimate based on competitor's social reach, industry, and follower counts. Set "competitor_revenue_is_estimate": true.
+   Use rough heuristics: small niche brand = $200k–$1M, mid-size = $1M–$10M, large = $10M+.
+
+Format as a clean dollar string: "~$3.75M", "~$1.2M", "~$800k" (use ~ prefix for estimates). No caveats in the value.
+The "competitor_revenue_is_estimate" boolean field tells the PDF renderer to label it as "Est.""""
 
 
 async def analyze(
