@@ -19,6 +19,7 @@ from scraper import (
     scrape_linkedin_profile, scrape_youtube_profile,
     scrape_tiktok_profile, scrape_instagram_profile,
     scrape_twitter_profile,
+    search_youtube, search_tiktok, search_instagram, search_twitter,
 )
 from term_deriver import derive_search_terms
 from researcher import research
@@ -93,23 +94,61 @@ async def run_pipeline(job_id: str):
         update_job(job_id, search_terms=json.dumps(search_terms))
 
         # ══════════════════════════════════════════════
-        # STEP 3 — Brand mention check (tags/mentions only, no keyword noise)
+        # STEP 3 — Brand mention search (filtered for actual mentions only)
         # ══════════════════════════════════════════════
         update_job(job_id, status="searching_platforms", step=3)
 
-        # We only count content where the brand is explicitly tagged/mentioned.
-        # Generic keyword search results inflate numbers with irrelevant content.
-        # If no one is tagging/mentioning the brand, the honest answer is 0 —
-        # which actually strengthens the "you're invisible" sales pitch.
+        # Build list of brand keywords to filter results against.
+        # Includes company name, person name, and any handles from the form.
+        brand_keywords = [job["company_name"].lower()]
+        if person_name and person_name.lower() != job["company_name"].lower():
+            brand_keywords.append(person_name.lower())
+        # Add social handles (stripped of URL parts)
+        for url_key in ["youtube_url", "tiktok_url", "instagram_url", "twitter_url"]:
+            raw = job.get(url_key) or ""
+            if raw:
+                handle = raw.rstrip("/").split("/")[-1].lstrip("@").lower()
+                if handle and handle not in brand_keywords:
+                    brand_keywords.append(handle)
+
+        yt_task = search_youtube(search_terms.get("youtube_query", job["company_name"]), brand_keywords)
+        tt_task = search_tiktok(search_terms.get("tiktok_query", job["company_name"]), brand_keywords)
+        ig_task = search_instagram(search_terms.get("instagram_query", job["company_name"]), brand_keywords)
+        tw_task = search_twitter(search_terms.get("x_query", job["company_name"]), brand_keywords)
+
+        yt_res, tt_res, ig_res, tw_res = await asyncio.gather(
+            yt_task, tt_task, ig_task, tw_task, return_exceptions=True
+        )
+
+        # Handle exceptions gracefully
+        if isinstance(yt_res, Exception):
+            print(f"[Worker] YouTube search failed: {yt_res}")
+            yt_res = {"total_views_48h": 0, "video_count": 0, "top_video_title": "", "top_video_views": 0, "data_found": False}
+        if isinstance(tt_res, Exception):
+            print(f"[Worker] TikTok search failed: {tt_res}")
+            tt_res = {"total_views_48h": 0, "video_count": 0, "top_video_desc": "", "top_video_views": 0, "data_found": False}
+        if isinstance(ig_res, Exception):
+            print(f"[Worker] Instagram search failed: {ig_res}")
+            ig_res = {"total_interactions_48h": 0, "total_video_views": 0, "post_count": 0, "estimated_reach": 0, "data_found": False}
+        if isinstance(tw_res, Exception):
+            print(f"[Worker] Twitter search failed: {tw_res}")
+            tw_res = {"total_impressions_48h": 0, "total_engagement": 0, "tweet_count": 0, "top_tweet_text": "", "top_tweet_impressions": 0, "data_found": False}
+
+        # Combined views = YouTube views + TikTok views + Instagram reach + Twitter impressions
+        combined = (
+            yt_res.get("total_views_48h", 0) +
+            tt_res.get("total_views_48h", 0) +
+            ig_res.get("estimated_reach", 0) +
+            tw_res.get("total_impressions_48h", 0)
+        )
 
         search_results = {
-            "youtube": {"total_views_48h": 0, "video_count": 0, "top_video_title": "", "top_video_views": 0, "data_found": False},
-            "tiktok": {"total_views_48h": 0, "video_count": 0, "top_video_desc": "", "top_video_views": 0, "data_found": False},
-            "instagram": {"total_interactions_48h": 0, "total_video_views": 0, "post_count": 0, "estimated_reach": 0, "data_found": False},
-            "x_twitter": {"total_impressions_48h": 0, "total_engagement": 0, "tweet_count": 0, "top_tweet_text": "", "top_tweet_impressions": 0, "data_found": False},
-            "combined_total_views_48h": 0,
+            "youtube": yt_res,
+            "tiktok": tt_res,
+            "instagram": ig_res,
+            "x_twitter": tw_res,
+            "combined_total_views_48h": combined,
         }
-        combined = 0
 
         update_job(job_id, combined_views_48h=combined)
 

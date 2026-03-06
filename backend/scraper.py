@@ -328,14 +328,86 @@ def _empty_twitter() -> dict:
 
 
 # ═══════════════════════════════════════════════════════════
-# STEP 3 — SEARCH MODE (brand mention volume, last 48h)
+# BRAND MENTION FILTER
 # ═══════════════════════════════════════════════════════════
 
-async def search_youtube(query: str) -> dict:
-    """Search YouTube for brand mentions.
+def _mentions_brand(item: dict, brand_keywords: list, platform: str) -> bool:
+    """Return True if the item explicitly mentions/tags the brand.
+    
+    Checks (in order of reliability):
+      1. Structured mention/tag arrays (@ mentions, # hashtags)
+      2. Brand keyword appearing in the text/caption/title
+    """
+    bk_lower = [k.lower() for k in brand_keywords]
+
+    if platform == "youtube":
+        # YouTube has no mention/tag system — check title + description
+        title = (item.get("title") or "").lower()
+        desc = (item.get("description") or "").lower()
+        channel = (item.get("channelName") or "").lower()
+        text = f"{title} {desc} {channel}"
+        return any(kw in text for kw in bk_lower)
+
+    elif platform == "tiktok":
+        # Check mentions[] and hashtags[] arrays first, then caption text
+        mentions = [m.lower() for m in (item.get("mentions") or [])]
+        hashtags = []
+        for h in (item.get("hashtags") or []):
+            if isinstance(h, str):
+                hashtags.append(h.lower())
+            elif isinstance(h, dict):
+                hashtags.append((h.get("name") or "").lower())
+        for kw in bk_lower:
+            if any(kw in m for m in mentions):
+                return True
+            if any(kw in h for h in hashtags):
+                return True
+        # Fallback: check caption text
+        text = (item.get("text") or "").lower()
+        return any(kw in text for kw in bk_lower)
+
+    elif platform == "instagram":
+        # Check mentions[] and hashtags[] arrays first, then caption
+        mentions = [m.lower() for m in (item.get("mentions") or [])]
+        hashtags = [(h if isinstance(h, str) else "").lower()
+                    for h in (item.get("hashtags") or [])]
+        for kw in bk_lower:
+            if any(kw in m for m in mentions):
+                return True
+            if any(kw in h for h in hashtags):
+                return True
+        caption = (item.get("caption") or "").lower()
+        return any(kw in caption for kw in bk_lower)
+
+    elif platform == "twitter":
+        # Check entities.user_mentions[] and entities.hashtags[] first
+        entities = item.get("entities") or {}
+        user_mentions = [m.get("screen_name", "").lower()
+                         for m in (entities.get("user_mentions") or [])]
+        hashtags = [h.get("text", "").lower()
+                    for h in (entities.get("hashtags") or [])]
+        for kw in bk_lower:
+            if any(kw in m for m in user_mentions):
+                return True
+            if any(kw in h for h in hashtags):
+                return True
+        # Fallback: check tweet text
+        text = (item.get("fullText") or item.get("text") or "").lower()
+        return any(kw in text for kw in bk_lower)
+
+    return False
+
+
+# ═══════════════════════════════════════════════════════════
+# STEP 3 — SEARCH MODE (brand mention volume, last 48h)
+# Filtered: only items where the brand is explicitly mentioned/tagged
+# ═══════════════════════════════════════════════════════════
+
+async def search_youtube(query: str, brand_keywords: list = None) -> dict:
+    """Search YouTube for brand mentions (filtered).
     
     Uses: streamers/youtube-scraper
-    Input: {"searchKeywords": "query", "maxResults": 20}
+    Input: {"searchKeywords": "query", "maxResults": 30}
     Output keys: title, viewCount, channelName, date, url
     """
     try:
@@ -345,6 +417,13 @@ async def search_youtube(query: str) -> dict:
             "maxShorts": 0,
             "maxStreams": 0,
         }, timeout=240)
+
+        # Filter for brand mentions only
+        if brand_keywords:
+            raw_count = len(items)
+            items = [i for i in items if _mentions_brand(i, brand_keywords, "youtube")]
+            print(f"[Scraper] YouTube: {raw_count} results -> {len(items)} brand mentions")
+
         total_views = 0
         top_title = ""
         top_views = 0
@@ -372,12 +451,12 @@ def _empty_youtube_search() -> dict:
             "top_video_views": 0, "data_found": False}
 
 
-async def search_tiktok(query: str) -> dict:
-    """Search TikTok for brand mentions.
+async def search_tiktok(query: str, brand_keywords: list = None) -> dict:
+    """Search TikTok for brand mentions (filtered).
     
     Uses: clockworks/tiktok-scraper
-    Input: {"searchQueries": ["query"], "resultsPerPage": 20}
-    Output keys: text, playCount, diggCount, shareCount, authorMeta
+    Input: {"searchQueries": ["query"], "resultsPerPage": 30}
+    Output keys: text, playCount, diggCount, shareCount, authorMeta, mentions[], hashtags[]
     """
     try:
         items = await _run_actor("clockworks/tiktok-scraper", {
@@ -390,6 +469,13 @@ async def search_tiktok(query: str) -> dict:
             "shouldDownloadMusicCovers": False,
             "shouldDownloadAvatars": False,
         }, timeout=180)
+
+        # Filter for brand mentions only
+        if brand_keywords:
+            raw_count = len(items)
+            items = [i for i in items if _mentions_brand(i, brand_keywords, "tiktok")]
+            print(f"[Scraper] TikTok: {raw_count} results -> {len(items)} brand mentions")
+
         total_views = 0
         top_desc = ""
         top_views = 0
@@ -417,13 +503,13 @@ def _empty_tiktok_search() -> dict:
             "top_video_views": 0, "data_found": False}
 
 
-async def search_instagram(query: str) -> dict:
-    """Search Instagram for brand mentions via hashtags.
+async def search_instagram(query: str, brand_keywords: list = None) -> dict:
+    """Search Instagram for brand mentions via hashtags (filtered).
     
     Uses: apify/instagram-hashtag-scraper
-    Input: {"hashtags": ["query"], "resultsLimit": 20}
+    Input: {"hashtags": ["query"], "resultsLimit": 30}
     Output keys: caption, likesCount, commentsCount, ownerUsername,
-                 videoPlayCount, timestamp
+                 videoPlayCount, timestamp, mentions[], hashtags[]
     """
     try:
         # Clean query for hashtag use (remove spaces, use as-is)
@@ -433,6 +519,13 @@ async def search_instagram(query: str) -> dict:
             "hashtags": [hashtag],
             "resultsLimit": SEARCH_MAX_RESULTS,
         })
+
+        # Filter for brand mentions only
+        if brand_keywords:
+            raw_count = len(items)
+            items = [i for i in items if _mentions_brand(i, brand_keywords, "instagram")]
+            print(f"[Scraper] Instagram: {raw_count} results -> {len(items)} brand mentions")
+
         total_interactions = 0
         total_video_views = 0
         post_count = 0
@@ -464,13 +557,14 @@ def _empty_instagram_search() -> dict:
             "post_count": 0, "estimated_reach": 0, "data_found": False}
 
 
-async def search_twitter(query: str) -> dict:
-    """Search X/Twitter for brand mentions.
+async def search_twitter(query: str, brand_keywords: list = None) -> dict:
+    """Search X/Twitter for brand mentions (filtered).
     
     Uses: apidojo/tweet-scraper
-    Input: {"searchTerms": ["query"], "maxItems": 20, "sort": "Latest"}
+    Input: {"searchTerms": ["query"], "maxItems": 30, "sort": "Latest"}
     Output keys: text, fullText, likeCount, retweetCount, replyCount, 
-                 quoteCount, viewCount, bookmarkCount, createdAt
+                 quoteCount, viewCount, bookmarkCount, createdAt,
+                 entities.user_mentions[], entities.hashtags[]
     """
     try:
         items = await _run_actor("apidojo/tweet-scraper", {
@@ -478,6 +572,13 @@ async def search_twitter(query: str) -> dict:
             "maxItems": SEARCH_MAX_RESULTS,
             "sort": "Latest",
         })
+
+        # Filter for brand mentions only
+        if brand_keywords:
+            raw_count = len(items)
+            items = [i for i in items if _mentions_brand(i, brand_keywords, "twitter")]
+            print(f"[Scraper] Twitter: {raw_count} results -> {len(items)} brand mentions")
+
         total_impressions = 0
         total_engagement = 0
         top_text = ""
