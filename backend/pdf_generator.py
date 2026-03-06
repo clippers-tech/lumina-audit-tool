@@ -1,421 +1,616 @@
-"""pdf_generator.py — ReportLab branded dark-theme PDF for LinkedIn audit."""
+"""
+Lumina Clippers Marketing Audit Tool — PDF Generator v3
+Dashboard-style: bold numbers, visual bars, minimal text, zero fluff.
+Sections: Gauge → Brand Visibility → Competitor Visibility → Revenue → CPM → CTA
+Packed tight — fewer pages, less whitespace.
+"""
 
-import os
-from datetime import datetime, timezone
+import os, math
+from datetime import datetime
+
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.colors import HexColor, white, Color
-from reportlab.lib.units import mm, inch
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_LEFT, TA_CENTER, TA_RIGHT
+from reportlab.lib.units import mm
+from reportlab.lib import colors
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 from reportlab.platypus import (
-    SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-    PageBreak, KeepTogether,
+    SimpleDocTemplate, Paragraph, Spacer, PageBreak,
+    Table, TableStyle, KeepTogether, Image,
 )
-from reportlab.graphics.shapes import Drawing, Rect, String, Circle
-from reportlab.graphics import renderPDF
+from reportlab.platypus.flowables import Flowable
+from reportlab.pdfgen import canvas as pdfgen_canvas
 
-# ── Brand colors ──
-BG_DARK = HexColor("#0D0D0D")
-BG_CARD = HexColor("#1A1A1A")
-BG_CARD_ALT = HexColor("#141414")
-GOLD = HexColor("#C9A84C")
-GOLD_DIM = HexColor("#8A7333")
-TEXT_WHITE = HexColor("#F0F0F0")
-TEXT_MUTED = HexColor("#999999")
-TEXT_FAINT = HexColor("#666666")
-SEVERITY_HIGH = HexColor("#E74C3C")
-SEVERITY_MEDIUM = HexColor("#E89B2D")
-SEVERITY_LOW = HexColor("#27AE60")
+
+# ───────────────────── Brand colours ─────────────────────
+BG_PAGE     = colors.HexColor("#0D0D0D")
+BG_CARD     = colors.HexColor("#1A1A1A")
+BG_CARD_ALT = colors.HexColor("#151515")
+GOLD        = colors.HexColor("#C9A84C")
+GOLD_DIM    = colors.HexColor("#8A7333")
+TEXT_WHITE   = colors.HexColor("#F0F0F0")
+TEXT_MUTED   = colors.HexColor("#999999")
+TEXT_FAINT   = colors.HexColor("#555555")
+RED          = colors.HexColor("#E74C3C")
+GREEN        = colors.HexColor("#27AE60")
+BLUE         = colors.HexColor("#3498DB")
+BAR_BG       = colors.HexColor("#2A2A2A")
 
 PAGE_W, PAGE_H = A4
-MARGIN = 20 * mm
+MARGIN    = 18 * mm
+CONTENT_W = PAGE_W - 2 * MARGIN
 
 
-def _severity_color(severity: str) -> HexColor:
+# ───────────────────── Page background + footer ──────────
+def _on_page(canv: pdfgen_canvas.Canvas, doc):
+    canv.saveState()
+    canv.setFillColor(BG_PAGE)
+    canv.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
+    fy = 10 * mm
+    canv.setStrokeColor(GOLD_DIM); canv.setLineWidth(0.3)
+    canv.line(MARGIN, fy, PAGE_W - MARGIN, fy)
+    canv.setFont("Helvetica", 6.5); canv.setFillColor(TEXT_FAINT)
+    canv.drawString(MARGIN, fy - 4, "Lumina Clippers — Visibility Audit")
+    canv.drawRightString(PAGE_W - MARGIN, fy - 4, f"Page {canv.getPageNumber()}")
+    canv.restoreState()
+
+
+# ───────────────────── Custom Flowables ──────────────────
+
+class GoldRule(Flowable):
+    def __init__(self, width, thickness=0.5):
+        super().__init__(); self.width = width; self.height = thickness
+    def draw(self):
+        self.canv.setStrokeColor(GOLD); self.canv.setLineWidth(self.height)
+        self.canv.line(0, 0, self.width, 0)
+
+
+class GaugeArc(Flowable):
+    """Semi-circle gauge: 0-100 score, colour-coded."""
+    def __init__(self, score, width=160, height=90):
+        super().__init__(); self.score = max(0, min(100, int(score)))
+        self.width = width; self.height = height
+
+    def draw(self):
+        cx, cy = self.width / 2, 12
+        r = 70
+        self.canv.setStrokeColor(BAR_BG); self.canv.setLineWidth(14)
+        self.canv.arc(cx - r, cy - r, cx + r, cy + r, 0, 180)
+        if self.score < 30:   c = RED
+        elif self.score < 60: c = GOLD
+        else:                 c = GREEN
+        self.canv.setStrokeColor(c); self.canv.setLineWidth(14)
+        angle = self.score / 100 * 180
+        self.canv.arc(cx - r, cy - r, cx + r, cy + r, 180, -angle)
+        self.canv.setFont("Helvetica-Bold", 36); self.canv.setFillColor(TEXT_WHITE)
+        self.canv.drawCentredString(cx, cy + 18, f"{self.score}")
+        self.canv.setFont("Helvetica", 10); self.canv.setFillColor(TEXT_MUTED)
+        self.canv.drawCentredString(cx, cy + 2, "/ 100")
+
+
+class HBar(Flowable):
+    """Horizontal comparison bar — two values, filled proportionally."""
+    def __init__(self, val_a, val_b, label_a, label_b, width=None, height=42,
+                 color_a=GOLD, color_b=RED):
+        super().__init__()
+        self.width = width or CONTENT_W
+        self.height = height
+        self.val_a = max(val_a, 0); self.val_b = max(val_b, 0)
+        self.label_a = label_a; self.label_b = label_b
+        self.color_a = color_a; self.color_b = color_b
+
+    def draw(self):
+        total = self.val_a + self.val_b
+        if total == 0: total = 1
+        bar_w = self.width - 4
+        bar_h = 14
+        y_top = self.height - 6
+        self.canv.setFont("Helvetica-Bold", 9); self.canv.setFillColor(TEXT_WHITE)
+        self.canv.drawString(2, y_top, self.label_a)
+        self.canv.setFont("Helvetica-Bold", 9); self.canv.setFillColor(self.color_a)
+        self.canv.drawRightString(self.width - 2, y_top, f"{self.val_a:,} views")
+        y_bar1 = y_top - 16
+        self.canv.setFillColor(BAR_BG)
+        self.canv.roundRect(2, y_bar1, bar_w, bar_h, 3, fill=1, stroke=0)
+        fill_a = max(4, bar_w * self.val_a / total)
+        self.canv.setFillColor(self.color_a)
+        self.canv.roundRect(2, y_bar1, fill_a, bar_h, 3, fill=1, stroke=0)
+        y_lab2 = y_bar1 - 16
+        self.canv.setFont("Helvetica-Bold", 9); self.canv.setFillColor(TEXT_WHITE)
+        self.canv.drawString(2, y_lab2, self.label_b)
+        self.canv.setFillColor(self.color_b)
+        self.canv.drawRightString(self.width - 2, y_lab2, f"{self.val_b:,} views")
+        y_bar2 = y_lab2 - 16
+        self.canv.setFillColor(BAR_BG)
+        self.canv.roundRect(2, y_bar2, bar_w, bar_h, 3, fill=1, stroke=0)
+        fill_b = max(4, bar_w * self.val_b / total)
+        self.canv.setFillColor(self.color_b)
+        self.canv.roundRect(2, y_bar2, fill_b, bar_h, 3, fill=1, stroke=0)
+
+
+class VBarChart(Flowable):
+    """Side-by-side vertical bar chart for two values."""
+    def __init__(self, val_a, val_b, label_a, label_b,
+                 name_a="You", name_b="Competitor",
+                 width=None, height=160, color_a=TEXT_WHITE, color_b=GOLD):
+        super().__init__()
+        self.width = width or CONTENT_W
+        self.height = height
+        self.val_a = val_a; self.val_b = val_b
+        self.label_a = label_a; self.label_b = label_b
+        self.name_a = name_a; self.name_b = name_b
+        self.color_a = color_a; self.color_b = color_b
+
+    def draw(self):
+        max_v = max(self.val_a, self.val_b, 1)
+        bar_area_h = self.height - 55
+        bar_w = 70
+        gap = 40
+        total_bars_w = bar_w * 2 + gap
+        start_x = (self.width - total_bars_w) / 2
+        base_y = 30
+
+        for i, (v, lbl, name, col) in enumerate([
+            (self.val_a, self.label_a, self.name_a, self.color_a),
+            (self.val_b, self.label_b, self.name_b, self.color_b),
+        ]):
+            x = start_x + i * (bar_w + gap)
+            h = max(6, bar_area_h * v / max_v)
+            self.canv.setFillColor(BAR_BG)
+            self.canv.roundRect(x, base_y, bar_w, bar_area_h, 4, fill=1, stroke=0)
+            self.canv.setFillColor(col)
+            self.canv.roundRect(x, base_y, bar_w, h, 4, fill=1, stroke=0)
+            # Value on top of bar
+            self.canv.setFont("Helvetica-Bold", 16); self.canv.setFillColor(col)
+            self.canv.drawCentredString(x + bar_w/2, base_y + h + 6, str(lbl))
+            # Name under bar
+            self.canv.setFont("Helvetica-Bold", 9); self.canv.setFillColor(TEXT_MUTED)
+            self.canv.drawCentredString(x + bar_w/2, base_y - 14, name)
+
+
+class CPMBars(Flowable):
+    """Two horizontal bars comparing CPM values — one tall, one tiny."""
+    def __init__(self, cpm_ads, cpm_clip, industry, width=None, height=100):
+        super().__init__()
+        self.width = width or CONTENT_W
+        self.height = height
+        self.cpm_ads = cpm_ads; self.cpm_clip = cpm_clip
+        self.industry = industry
+
+    def draw(self):
+        bar_w = self.width * 0.65
+        x_start = (self.width - bar_w) / 2
+        y1 = self.height - 20
+        self.canv.setFont("Helvetica-Bold", 10); self.canv.setFillColor(RED)
+        self.canv.drawString(x_start, y1 + 2, f"Meta Ads  —  ${self.cpm_ads:.2f} CPM")
+        self.canv.setFillColor(RED)
+        self.canv.roundRect(x_start, y1 - 18, bar_w, 14, 3, fill=1, stroke=0)
+        y2 = y1 - 50
+        self.canv.setFont("Helvetica-Bold", 10); self.canv.setFillColor(GREEN)
+        self.canv.drawString(x_start, y2 + 2, f"Clipping  —  ${self.cpm_clip:.2f} CPM")
+        clip_w = max(6, bar_w * self.cpm_clip / max(self.cpm_ads, 0.01))
+        self.canv.setFillColor(BAR_BG)
+        self.canv.roundRect(x_start, y2 - 18, bar_w, 14, 3, fill=1, stroke=0)
+        self.canv.setFillColor(GREEN)
+        self.canv.roundRect(x_start, y2 - 18, clip_w, 14, 3, fill=1, stroke=0)
+        if self.cpm_clip > 0:
+            mult = self.cpm_ads / self.cpm_clip
+            self.canv.setFont("Helvetica-Bold", 18); self.canv.setFillColor(GOLD)
+            self.canv.drawCentredString(self.width / 2, y2 - 48, f"{mult:.0f}x cheaper")
+
+
+# ───────────────────── Styles ────────────────────────────
+def _styles():
+    base = dict(fontName="Helvetica", textColor=TEXT_WHITE, backColor=None, spaceAfter=2)
+    def s(name, **kw): return ParagraphStyle(name, **{**base, **kw})
     return {
-        "high": SEVERITY_HIGH,
-        "medium": SEVERITY_MEDIUM,
-        "low": SEVERITY_LOW,
-    }.get(severity.lower(), TEXT_MUTED)
+        "brand":      s("brand", fontSize=36, leading=42, textColor=GOLD,
+                         alignment=TA_CENTER, fontName="Helvetica-Bold"),
+        "brand_sub":  s("brand_sub", fontSize=13, leading=16, textColor=TEXT_MUTED,
+                         alignment=TA_CENTER),
+        "h1":         s("h1", fontSize=20, leading=24, textColor=GOLD,
+                         fontName="Helvetica-Bold", spaceAfter=2),
+        "h2":         s("h2", fontSize=14, leading=18, textColor=GOLD,
+                         fontName="Helvetica-Bold", spaceAfter=2),
+        "big_num":    s("big_num", fontSize=44, leading=50, textColor=TEXT_WHITE,
+                         alignment=TA_CENTER, fontName="Helvetica-Bold"),
+        "big_gold":   s("big_gold", fontSize=44, leading=50, textColor=GOLD,
+                         alignment=TA_CENTER, fontName="Helvetica-Bold"),
+        "label":      s("label", fontSize=10, leading=13, textColor=TEXT_MUTED,
+                         alignment=TA_CENTER),
+        "label_left": s("label_left", fontSize=10, leading=13, textColor=TEXT_MUTED),
+        "card_num":   s("card_num", fontSize=22, leading=26, textColor=TEXT_WHITE,
+                         alignment=TA_CENTER, fontName="Helvetica-Bold"),
+        "card_gold":  s("card_gold", fontSize=22, leading=26, textColor=GOLD,
+                         alignment=TA_CENTER, fontName="Helvetica-Bold"),
+        "card_label": s("card_label", fontSize=9, leading=12, textColor=TEXT_MUTED,
+                         alignment=TA_CENTER, fontName="Helvetica-Bold"),
+        "scale_txt":  s("scale_txt", fontSize=8, leading=10, textColor=TEXT_FAINT,
+                         alignment=TA_CENTER),
+        "name":       s("name", fontSize=16, leading=20, textColor=TEXT_WHITE,
+                         alignment=TA_CENTER, fontName="Helvetica-Bold"),
+        "detail":     s("detail", fontSize=11, leading=14, textColor=TEXT_MUTED,
+                         alignment=TA_CENTER),
+        "date":       s("date", fontSize=8, leading=11, textColor=TEXT_FAINT,
+                         alignment=TA_CENTER),
+        "body":       s("body", fontSize=10, leading=14, textColor=TEXT_MUTED),
+        "cta_big":    s("cta_big", fontSize=20, leading=26, textColor=GOLD,
+                         alignment=TA_CENTER, fontName="Helvetica-Bold"),
+        "cta_email":  s("cta_email", fontSize=11, leading=14, textColor=TEXT_MUTED,
+                         alignment=TA_CENTER),
+        "bullet":     s("bullet", fontSize=10, leading=14, textColor=TEXT_WHITE),
+    }
 
 
-def _severity_label(severity: str) -> str:
-    return severity.upper()
+# ───────────────────── Helpers ───────────────────────────
+def _fmt(n):
+    try: return f"{int(n):,}"
+    except: return str(n) if n else "0"
 
+def _safe(d, *keys, default=""):
+    for k in keys:
+        if not isinstance(d, dict): return default
+        d = d.get(k); 
+        if d is None: return default
+    return d if d is not None else default
 
-def _bg_canvas(canvas, doc):
-    """Draw dark background on every page."""
-    canvas.saveState()
-    canvas.setFillColor(BG_DARK)
-    canvas.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
-
-    # Footer
-    canvas.setFillColor(TEXT_FAINT)
-    canvas.setFont("Helvetica", 7)
-    canvas.drawString(MARGIN, 10 * mm, f"Lumina Clippers — LinkedIn Audit Report")
-    canvas.drawRightString(PAGE_W - MARGIN, 10 * mm, f"Page {canvas.getPageNumber()}")
-
-    canvas.restoreState()
-
-
-def _make_styles():
-    """Create custom paragraph styles for the dark PDF."""
-    styles = {}
-
-    styles["title"] = ParagraphStyle(
-        "title",
-        fontName="Helvetica-Bold",
-        fontSize=28,
-        leading=34,
-        textColor=GOLD,
-        alignment=TA_LEFT,
-    )
-    styles["h1"] = ParagraphStyle(
-        "h1",
-        fontName="Helvetica-Bold",
-        fontSize=20,
-        leading=26,
-        textColor=GOLD,
-        alignment=TA_LEFT,
-        spaceBefore=10,
-        spaceAfter=8,
-    )
-    styles["h2"] = ParagraphStyle(
-        "h2",
-        fontName="Helvetica-Bold",
-        fontSize=14,
-        leading=18,
-        textColor=TEXT_WHITE,
-        alignment=TA_LEFT,
-        spaceBefore=6,
-        spaceAfter=4,
-    )
-    styles["body"] = ParagraphStyle(
-        "body",
-        fontName="Helvetica",
-        fontSize=10,
-        leading=14,
-        textColor=TEXT_WHITE,
-        alignment=TA_LEFT,
-    )
-    styles["body_muted"] = ParagraphStyle(
-        "body_muted",
-        fontName="Helvetica",
-        fontSize=9,
-        leading=13,
-        textColor=TEXT_MUTED,
-        alignment=TA_LEFT,
-    )
-    styles["body_small"] = ParagraphStyle(
-        "body_small",
-        fontName="Helvetica",
-        fontSize=8,
-        leading=11,
-        textColor=TEXT_MUTED,
-    )
-    styles["center"] = ParagraphStyle(
-        "center",
-        fontName="Helvetica",
-        fontSize=10,
-        leading=14,
-        textColor=TEXT_WHITE,
-        alignment=TA_CENTER,
-    )
-    styles["center_gold"] = ParagraphStyle(
-        "center_gold",
-        fontName="Helvetica-Bold",
-        fontSize=12,
-        leading=16,
-        textColor=GOLD,
-        alignment=TA_CENTER,
-    )
-    styles["score_big"] = ParagraphStyle(
-        "score_big",
-        fontName="Helvetica-Bold",
-        fontSize=64,
-        leading=72,
-        textColor=GOLD,
-        alignment=TA_CENTER,
-    )
-    styles["lumina_brand"] = ParagraphStyle(
-        "lumina_brand",
-        fontName="Helvetica-Bold",
-        fontSize=42,
-        leading=50,
-        textColor=GOLD,
-        alignment=TA_CENTER,
-        spaceAfter=6,
-    )
-    styles["subtitle"] = ParagraphStyle(
-        "subtitle",
-        fontName="Helvetica",
-        fontSize=12,
-        leading=16,
-        textColor=TEXT_MUTED,
-        alignment=TA_CENTER,
-    )
-    styles["badge_high"] = ParagraphStyle(
-        "badge",
-        fontName="Helvetica-Bold",
-        fontSize=8,
-        leading=10,
-        textColor=white,
-    )
-    return styles
-
-
-def _gap_table(gaps: list, styles: dict, available_width: float) -> list:
-    """Render a list of gap items as styled table rows."""
-    elements = []
-    for gap in gaps:
-        sev = gap.get("severity", "medium")
-        sev_color = _severity_color(sev)
-        sev_label = _severity_label(sev)
-
-        issue_text = f'<font color="{TEXT_WHITE.hexval()}">{gap.get("issue", "")}</font>'
-        evidence_text = f'<font color="{TEXT_MUTED.hexval()}"><b>Evidence:</b> {gap.get("evidence", "")}</font>'
-        fix_text = f'<font color="{TEXT_MUTED.hexval()}"><b>Fix:</b> {gap.get("fix", "")}</font>'
-
-        badge_para = Paragraph(
-            f'<font color="white">{sev_label}</font>',
-            styles["badge_high"],
-        )
-        issue_para = Paragraph(issue_text, styles["h2"])
-        evidence_para = Paragraph(evidence_text, styles["body_small"])
-        fix_para = Paragraph(fix_text, styles["body_small"])
-
-        # Table: [severity badge | issue + evidence + fix]
-        inner_content = []
-        inner_content.append(issue_para)
-        inner_content.append(Spacer(1, 3))
-        inner_content.append(evidence_para)
-        inner_content.append(Spacer(1, 3))
-        inner_content.append(fix_para)
-
-        # Build single-row table for the card
-        data = [[badge_para, inner_content]]
-        col_widths = [55, available_width - 55 - 12]
-        t = Table(data, colWidths=col_widths)
-        t.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), BG_CARD),
-            ("BOX", (0, 0), (-1, -1), 0.5, HexColor("#2A2A2A")),
-            ("VALIGN", (0, 0), (0, 0), "TOP"),
-            ("VALIGN", (1, 0), (1, 0), "TOP"),
-            ("TOPPADDING", (0, 0), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-            ("LEFTPADDING", (0, 0), (0, 0), 8),
-            ("LEFTPADDING", (1, 0), (1, 0), 4),
-            ("RIGHTPADDING", (-1, -1), (-1, -1), 8),
-            ("BACKGROUND", (0, 0), (0, 0), sev_color),
-            ("TEXTCOLOR", (0, 0), (0, 0), white),
-            ("ALIGN", (0, 0), (0, 0), "CENTER"),
-            ("ROUNDEDCORNERS", [4, 4, 4, 4]),
+def _platform_cards(platforms, styles, card_style="card_num"):
+    """Build a 2x2 grid of platform metric boxes."""
+    if not platforms: return []
+    cells = []
+    for p in platforms[:4]:
+        name  = _safe(p, "platform", default="—")
+        views = _safe(p, "their_views", default=0)
+        inner = Table([
+            [Paragraph(name.upper(), styles["card_label"])],
+            [Paragraph(_fmt(views), styles[card_style])],
+            [Paragraph("views", styles["scale_txt"])],
+        ], colWidths=[(CONTENT_W - 20) / 2])
+        inner.setStyle(TableStyle([
+            ("BACKGROUND",   (0,0),(-1,-1), BG_CARD),
+            ("BOX",          (0,0),(-1,-1), 0.5, GOLD_DIM),
+            ("ALIGN",        (0,0),(-1,-1), "CENTER"),
+            ("TOPPADDING",   (0,0),(-1,-1), 6),
+            ("BOTTOMPADDING",(0,0),(-1,-1), 6),
+            ("LEFTPADDING",  (0,0),(-1,-1), 4),
+            ("RIGHTPADDING", (0,0),(-1,-1), 4),
         ]))
-        elements.append(KeepTogether([t, Spacer(1, 6)]))
-    return elements
+        cells.append(inner)
+    empty_cell = Paragraph("", styles["scale_txt"])
+    while len(cells) < 4:
+        cells.append(empty_cell)
+    half_w = (CONTENT_W - 10) / 2
+    grid = Table([[cells[0], cells[1]], [cells[2], cells[3]]],
+                 colWidths=[half_w, half_w],
+                 hAlign="CENTER")
+    grid.setStyle(TableStyle([
+        ("LEFTPADDING",  (0,0),(-1,-1), 2),
+        ("RIGHTPADDING", (0,0),(-1,-1), 2),
+        ("TOPPADDING",   (0,0),(-1,-1), 2),
+        ("BOTTOMPADDING",(0,0),(-1,-1), 2),
+        ("ALIGN",        (0,0),(-1,-1), "CENTER"),
+    ]))
+    return [grid]
 
 
-def _score_ring_drawing(score: int, size: float = 120) -> Drawing:
-    """Draw a circular score ring using ReportLab graphics."""
-    d = Drawing(size, size)
-    cx, cy = size / 2, size / 2
-    r = size / 2 - 8
+# ═══════════════════════════════════════════════════════════
+# PAGE BUILDERS — compact layout, minimal gaps
+# ═══════════════════════════════════════════════════════════
 
-    # Background circle
-    bg_circle = Circle(cx, cy, r)
-    bg_circle.fillColor = BG_CARD_ALT
-    bg_circle.strokeColor = HexColor("#2A2A2A")
-    bg_circle.strokeWidth = 2
-    d.add(bg_circle)
+def _page1_score(story, audit, styles):
+    """PAGE 1 — Visibility Score gauge + prospect info."""
+    p = audit.get("prospect", {})
+    score    = int(_safe(p, "visibility_score", default=0))
+    name     = _safe(p, "name", default="Prospect")
+    company  = _safe(p, "company", default="")
+    industry = _safe(p, "industry", default="")
+    today    = datetime.now().strftime("%B %d, %Y")
 
-    # Score text
-    score_str = String(cx, cy - 10, str(score),
-                       fontName="Helvetica-Bold", fontSize=32,
-                       fillColor=GOLD, textAnchor="middle")
-    d.add(score_str)
+    story.append(Spacer(1, 14*mm))
+    story.append(Paragraph("LUMINA CLIPPERS", styles["brand"]))
+    story.append(Spacer(1, 1*mm))
+    story.append(Paragraph("Visibility Audit", styles["brand_sub"]))
+    story.append(Spacer(1, 6*mm))
+    story.append(GoldRule(CONTENT_W))
+    story.append(Spacer(1, 8*mm))
 
-    label_str = String(cx, cy - 24, "/100",
-                       fontName="Helvetica", fontSize=10,
-                       fillColor=TEXT_MUTED, textAnchor="middle")
-    d.add(label_str)
+    gauge = GaugeArc(score, width=200, height=100)
+    gauge.hAlign = "CENTER"
+    story.append(gauge)
+    story.append(Spacer(1, 2*mm))
+    story.append(Paragraph("VISIBILITY SCORE", styles["label"]))
+    story.append(Spacer(1, 4*mm))
 
-    return d
+    scale = Table(
+        [[Paragraph("0–30  LOW", styles["scale_txt"]),
+          Paragraph("30–60  MODERATE", styles["scale_txt"]),
+          Paragraph("60–100  STRONG", styles["scale_txt"])]],
+        colWidths=[CONTENT_W/3]*3)
+    scale.setStyle(TableStyle([
+        ("ALIGN",(0,0),(-1,-1),"CENTER"),
+        ("TOPPADDING",(0,0),(-1,-1),0),
+        ("BOTTOMPADDING",(0,0),(-1,-1),0),
+    ]))
+    story.append(scale)
+
+    story.append(Spacer(1, 8*mm))
+    story.append(GoldRule(CONTENT_W))
+    story.append(Spacer(1, 4*mm))
+    story.append(Paragraph(name, styles["name"]))
+    if company or industry:
+        parts = [x for x in [company, industry] if x]
+        story.append(Paragraph(" · ".join(parts), styles["detail"]))
+    story.append(Spacer(1, 4*mm))
+    story.append(Paragraph(today, styles["date"]))
+    story.append(PageBreak())
 
 
-def generate_pdf(audit: dict, job_id: str) -> str:
-    """Generate a dark-themed branded PDF audit report.
+def _page2_brand_visibility(story, audit, styles):
+    """Brand Exposure (48h) + platform boxes."""
+    vis   = audit.get("visibility_audit", {})
+    total = _safe(vis, "their_total_views_48h", default=0)
+    plats = _safe(vis, "platform_breakdown", default=[]) or []
 
-    Args:
-        audit: The structured audit dict from Claude.
-        job_id: Used to name the output file.
+    story.append(Paragraph("Brand Exposure", styles["h1"]))
+    story.append(GoldRule(CONTENT_W))
+    story.append(Spacer(1, 4*mm))
 
-    Returns:
-        Absolute path to the generated PDF.
-    """
-    output_path = os.path.join("outputs", f"{job_id}.pdf")
+    story.append(Paragraph(_fmt(total), styles["big_num"]))
+    story.append(Paragraph("total views on brand mentions (past 48 hours)", styles["label"]))
+    story.append(Spacer(1, 5*mm))
+
+    for el in _platform_cards(plats, styles, "card_num"):
+        story.append(el)
+
+    # No PageBreak — let content flow naturally
+
+
+def _page3_competitor(story, audit, styles):
+    """Competitor Exposure (48h) + comparison bar."""
+    comp  = audit.get("competitor_visibility", {})
+    c_total = _safe(comp, "competitor_total_views_48h", default=0)
+    c_name  = _safe(comp, "competitor_name", default="Competitor")
+    c_plats = _safe(comp, "platform_breakdown", default=[]) or []
+
+    vis   = audit.get("visibility_audit", {})
+    your_total = _safe(vis, "their_total_views_48h", default=0)
+
+    story.append(Spacer(1, 6*mm))
+    story.append(Paragraph("Competitor Exposure", styles["h1"]))
+    story.append(GoldRule(CONTENT_W))
+    story.append(Spacer(1, 3*mm))
+
+    bar = HBar(int(your_total), int(c_total),
+               "Your Brand", c_name, color_a=GOLD, color_b=RED)
+    bar.hAlign = "CENTER"
+    story.append(bar)
+    story.append(Spacer(1, 4*mm))
+
+    story.append(Paragraph(_fmt(c_total), styles["big_gold"]))
+    story.append(Paragraph(f"{c_name} views (past 48 hours)", styles["label"]))
+    story.append(Spacer(1, 4*mm))
+
+    for el in _platform_cards(c_plats, styles, "card_gold"):
+        story.append(el)
+
+    story.append(PageBreak())
+
+
+def _page4_revenue(story, audit, styles):
+    """Revenue Comparison bar chart — no view counts shown."""
+    rev = audit.get("revenue_comparison", {})
+    own_rev_str  = _safe(rev, "own_revenue", default="$0")
+    comp_name    = _safe(rev, "competitor_name", default="Competitor")
+    comp_rev_str = _safe(rev, "competitor_revenue", default="$0")
+
+    def _parse_dollar(s):
+        try:
+            s = str(s).replace("$","").replace(",","").replace("/yr","").replace("/year","").strip()
+            if "m" in s.lower() or "M" in s:
+                s = s.lower().replace("m","").strip()
+                return float(s) * 1_000_000
+            if "k" in s.lower() or "K" in s:
+                s = s.lower().replace("k","").strip()
+                return float(s) * 1_000
+            return float(s)
+        except: return 0
+
+    own_v  = _parse_dollar(own_rev_str)
+    comp_v = _parse_dollar(comp_rev_str)
+
+    story.append(Paragraph("Revenue Comparison", styles["h1"]))
+    story.append(GoldRule(CONTENT_W))
+    story.append(Spacer(1, 5*mm))
+
+    chart = VBarChart(own_v, comp_v,
+                      own_rev_str, comp_rev_str,
+                      name_a="You", name_b=comp_name,
+                      color_a=TEXT_WHITE, color_b=GOLD,
+                      height=150)
+    chart.hAlign = "CENTER"
+    story.append(chart)
+    story.append(Spacer(1, 6*mm))
+
+    # Two revenue boxes — no views references
+    half = (CONTENT_W - 8) / 2
+    left = Table([
+        [Paragraph("YOUR REVENUE", styles["card_label"])],
+        [Paragraph(str(own_rev_str), styles["card_num"])],
+    ], colWidths=[half])
+    left.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,-1), BG_CARD),
+        ("BOX",(0,0),(-1,-1),0.5,GOLD_DIM),
+        ("ALIGN",(0,0),(-1,-1),"CENTER"),
+        ("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),
+    ]))
+    right = Table([
+        [Paragraph(f"{comp_name.upper()} REVENUE", styles["card_label"])],
+        [Paragraph(str(comp_rev_str), styles["card_gold"])],
+    ], colWidths=[half])
+    right.setStyle(TableStyle([
+        ("BACKGROUND",(0,0),(-1,-1), BG_CARD),
+        ("BOX",(0,0),(-1,-1),0.5,GOLD),
+        ("ALIGN",(0,0),(-1,-1),"CENTER"),
+        ("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),
+    ]))
+    row = Table([[left, right]], colWidths=[half+4, half+4])
+    row.setStyle(TableStyle([
+        ("LEFTPADDING",(0,0),(-1,-1),0),("RIGHTPADDING",(0,0),(-1,-1),0),
+        ("TOPPADDING",(0,0),(-1,-1),0),("BOTTOMPADDING",(0,0),(-1,-1),0),
+    ]))
+    story.append(row)
+
+    # No PageBreak — let CPM section follow naturally
+
+
+def _page5_cpm(story, audit, styles):
+    """CPM Comparison: Meta Ads vs Clipping."""
+    cost   = audit.get("cost_analysis", {})
+    cpm_ads  = float(_safe(cost, "meta_cpm", default=14))
+    cpm_clip = float(_safe(cost, "clipping_cpm", default=0.70))
+    industry = _safe(audit, "prospect", "industry", default="your industry")
+
+    story.append(Spacer(1, 6*mm))
+    story.append(Paragraph("Cost Analysis", styles["h1"]))
+    story.append(GoldRule(CONTENT_W))
+    story.append(Spacer(1, 2*mm))
+    story.append(Paragraph(f"{industry} — Average Meta Ads CPM", styles["label"]))
+    story.append(Spacer(1, 5*mm))
+
+    bars = CPMBars(cpm_ads, cpm_clip, industry, height=100)
+    bars.hAlign = "CENTER"
+    story.append(bars)
+    story.append(Spacer(1, 6*mm))
+
+    bp_style = ParagraphStyle("bullet_point", parent=styles["bullet"],
+                               bulletFontName="Helvetica-Bold", bulletFontSize=12,
+                               bulletColor=GOLD, leftIndent=18, bulletIndent=0,
+                               spaceBefore=3, spaceAfter=3,
+                               backColor=BG_CARD)
+    b1 = Paragraph("<bullet>\u2022</bullet>Clips live forever \u2014 compounding views at zero marginal cost", bp_style)
+    b2 = Paragraph("<bullet>\u2022</bullet>Ads stop the moment budget stops \u2014 zero residual value", bp_style)
+    story.append(b1)
+    story.append(Spacer(1, 1*mm))
+    story.append(b2)
+
+    story.append(PageBreak())
+
+
+# ── Path to bundled CTA assets ──
+_ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+_IMG_VOUCH  = os.path.join(_ASSETS_DIR, "vouch_dashboard.jpg")
+_IMG_WALL   = os.path.join(_ASSETS_DIR, "client_wall.jpg")
+
+
+def _page6_cta(story, audit, styles):
+    """CTA page: two proof images + contact info."""
+    story.append(Spacer(1, 4*mm))
+    story.append(Paragraph("LUMINA CLIPPERS", styles["brand"]))
+    story.append(Spacer(1, 1*mm))
+    story.append(Paragraph("Content Tracking Dashboard", styles["brand_sub"]))
+    story.append(Spacer(1, 3*mm))
+    story.append(GoldRule(CONTENT_W))
+    story.append(Spacer(1, 4*mm))
+
+    img_w = CONTENT_W
+    if os.path.exists(_IMG_VOUCH):
+        img1 = Image(_IMG_VOUCH, width=img_w, height=img_w * 0.52,
+                     kind='proportional')
+        img1.hAlign = 'CENTER'
+        story.append(img1)
+    story.append(Spacer(1, 3*mm))
+
+    if os.path.exists(_IMG_WALL):
+        img2 = Image(_IMG_WALL, width=img_w, height=img_w * 0.50,
+                     kind='proportional')
+        img2.hAlign = 'CENTER'
+        story.append(img2)
+    story.append(Spacer(1, 4*mm))
+
+    story.append(GoldRule(CONTENT_W))
+    story.append(Spacer(1, 3*mm))
+    story.append(Paragraph("Book Your Free Strategy Call", styles["cta_big"]))
+    story.append(Spacer(1, 2*mm))
+    story.append(Paragraph('<a href="mailto:rhys@luminaclippers.com" color="#999999">rhys@luminaclippers.com</a>', styles["cta_email"]))
+    story.append(Spacer(1, 1*mm))
+    story.append(Paragraph("luminaclippers.com", styles["date"]))
+
+
+# ═══════════════════════════════════════════════════════════
+# PUBLIC API
+# ═══════════════════════════════════════════════════════════
+
+def generate_pdf(audit: dict, job_id: str, output_dir: str = "outputs") -> str:
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    if not os.path.isabs(output_dir):
+        output_dir = os.path.join(script_dir, output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+    filepath = os.path.join(output_dir, f"{job_id}.pdf")
 
     doc = SimpleDocTemplate(
-        output_path,
-        pagesize=A4,
-        leftMargin=MARGIN,
-        rightMargin=MARGIN,
-        topMargin=MARGIN,
-        bottomMargin=MARGIN + 10 * mm,
+        filepath, pagesize=A4,
+        leftMargin=MARGIN, rightMargin=MARGIN,
+        topMargin=MARGIN, bottomMargin=18*mm,
+        title="Lumina Clippers Visibility Audit",
+        author="Perplexity Computer",
     )
-
-    available_width = PAGE_W - 2 * MARGIN
-    styles = _make_styles()
+    st = _styles()
     story = []
+    _page1_score(story, audit, st)
+    _page2_brand_visibility(story, audit, st)
+    _page3_competitor(story, audit, st)
+    _page4_revenue(story, audit, st)
+    _page5_cpm(story, audit, st)
+    _page6_cta(story, audit, st)
+    doc.build(story, onFirstPage=_on_page, onLaterPages=_on_page)
+    return filepath
 
-    prospect = audit.get("prospect", {})
-    name = prospect.get("name", "Unknown")
-    headline = prospect.get("headline", "")
-    company = prospect.get("company", "")
-    score = prospect.get("score", 0)
-    score_rationale = prospect.get("score_rationale", "")
-    lumina_fit = audit.get("lumina_fit_score", 0)
-    lumina_pitch = audit.get("lumina_pitch", "")
 
-    # ──────────────────────────────────────
-    # PAGE 1: Cover
-    # ──────────────────────────────────────
-    story.append(Spacer(1, 40 * mm))
-    story.append(Paragraph("LUMINA", styles["lumina_brand"]))
-    story.append(Paragraph("CLIPPERS", styles["lumina_brand"]))
-    story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph("LinkedIn Audit Report", styles["subtitle"]))
-    story.append(Spacer(1, 20 * mm))
-
-    # Score ring
-    ring = _score_ring_drawing(score, size=140)
-    ring_table = Table([[ring]], colWidths=[available_width])
-    ring_table.setStyle(TableStyle([
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-    ]))
-    story.append(ring_table)
-    story.append(Spacer(1, 4 * mm))
-    story.append(Paragraph("Brand Presence Score", styles["center_gold"]))
-    story.append(Spacer(1, 12 * mm))
-
-    # Prospect info
-    story.append(Paragraph(name, styles["h1"]))
-    if headline:
-        story.append(Paragraph(headline, styles["body_muted"]))
-    if company:
-        story.append(Paragraph(company, styles["body_muted"]))
-    story.append(Spacer(1, 6 * mm))
-    story.append(Paragraph(score_rationale, styles["body"]))
-    story.append(Spacer(1, 10 * mm))
-
-    # Date
-    now_str = datetime.now(timezone.utc).strftime("%B %d, %Y")
-    story.append(Paragraph(f"Generated: {now_str}", styles["body_small"]))
-    story.append(PageBreak())
-
-    # ──────────────────────────────────────
-    # PAGE 2: Lumina Pitch + Quick Wins + Priority Actions
-    # ──────────────────────────────────────
-    story.append(Paragraph("── WHY LUMINA CLIPPERS ──", styles["h1"]))
-    story.append(Spacer(1, 4 * mm))
-
-    # Lumina fit score
-    fit_table_data = [[
-        Paragraph(f"<font color='{GOLD.hexval()}'><b>Lumina Fit Score: {lumina_fit}/100</b></font>", styles["body"]),
-    ]]
-    fit_table = Table(fit_table_data, colWidths=[available_width])
-    fit_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, -1), BG_CARD),
-        ("BOX", (0, 0), (-1, -1), 1, GOLD_DIM),
-        ("TOPPADDING", (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
-        ("LEFTPADDING", (0, 0), (-1, -1), 12),
-    ]))
-    story.append(fit_table)
-    story.append(Spacer(1, 6 * mm))
-
-    story.append(Paragraph(lumina_pitch, styles["body"]))
-    story.append(Spacer(1, 10 * mm))
-
-    # Quick wins
-    story.append(Paragraph("── QUICK WINS ──", styles["h1"]))
-    story.append(Spacer(1, 3 * mm))
-    quick_wins = audit.get("quick_wins", [])
-    for i, win in enumerate(quick_wins, 1):
-        win_data = [[Paragraph(f"<font color='{GOLD.hexval()}'><b>{i}.</b></font>", styles["body"]),
-                     Paragraph(win, styles["body"])]]
-        win_table = Table(win_data, colWidths=[20, available_width - 20])
-        win_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), BG_CARD_ALT),
-            ("TOPPADDING", (0, 0), (-1, -1), 6),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-            ("LEFTPADDING", (0, 0), (0, 0), 10),
-            ("LEFTPADDING", (1, 0), (1, 0), 4),
-            ("RIGHTPADDING", (-1, -1), (-1, -1), 10),
-            ("BOX", (0, 0), (-1, -1), 0.5, HexColor("#2A2A2A")),
-        ]))
-        story.append(win_table)
-        story.append(Spacer(1, 4))
-
-    story.append(Spacer(1, 8 * mm))
-
-    # Priority actions
-    story.append(Paragraph("── PRIORITY ACTIONS ──", styles["h1"]))
-    story.append(Spacer(1, 3 * mm))
-    priority_actions = audit.get("priority_actions", [])
-    action_rows = []
-    for i, action in enumerate(priority_actions, 1):
-        action_rows.append([
-            Paragraph(f"<font color='{GOLD.hexval()}'><b>{i}</b></font>", styles["center_gold"]),
-            Paragraph(action, styles["body"]),
-        ])
-    if action_rows:
-        actions_table = Table(action_rows, colWidths=[30, available_width - 30])
-        actions_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, -1), BG_CARD),
-            ("ROWBACKGROUNDS", (0, 0), (-1, -1), [BG_CARD, BG_CARD_ALT]),
-            ("BOX", (0, 0), (-1, -1), 0.5, HexColor("#2A2A2A")),
-            ("LINEBELOW", (0, 0), (-1, -2), 0.25, HexColor("#2A2A2A")),
-            ("TOPPADDING", (0, 0), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-            ("LEFTPADDING", (0, 0), (0, -1), 10),
-            ("LEFTPADDING", (1, 0), (1, -1), 8),
-            ("RIGHTPADDING", (-1, -1), (-1, -1), 10),
-            ("ALIGN", (0, 0), (0, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "TOP"),
-        ]))
-        story.append(actions_table)
-
-    story.append(PageBreak())
-
-    # ──────────────────────────────────────
-    # PAGE 3+: Gap Analysis
-    # ──────────────────────────────────────
-
-    # Personal Brand Gaps
-    personal_gaps = audit.get("personal_brand_gaps", [])
-    if personal_gaps:
-        story.append(Paragraph("── PERSONAL BRAND GAPS ──", styles["h1"]))
-        story.append(Spacer(1, 4 * mm))
-        story.extend(_gap_table(personal_gaps, styles, available_width))
-        story.append(Spacer(1, 8 * mm))
-
-    # Company Brand Gaps
-    company_gaps = audit.get("company_brand_gaps", [])
-    if company_gaps:
-        story.append(Paragraph("── COMPANY BRAND GAPS ──", styles["h1"]))
-        story.append(Spacer(1, 4 * mm))
-        story.extend(_gap_table(company_gaps, styles, available_width))
-        story.append(Spacer(1, 8 * mm))
-
-    # Content Strategy Gaps
-    content_gaps = audit.get("content_strategy_gaps", [])
-    if content_gaps:
-        story.append(Paragraph("── CONTENT STRATEGY GAPS ──", styles["h1"]))
-        story.append(Spacer(1, 4 * mm))
-        story.extend(_gap_table(content_gaps, styles, available_width))
-
-    # Build PDF
-    doc.build(story, onFirstPage=_bg_canvas, onLaterPages=_bg_canvas)
-
-    return output_path
+# ═══════════════════════════════════════════════════════════
+# SMOKE TEST
+# ═══════════════════════════════════════════════════════════
+if __name__ == "__main__":
+    sample = {
+        "prospect": {
+            "name": "Jordan Mitchell",
+            "company": "UrbanEdge Barbershop",
+            "industry": "Men's Grooming",
+            "visibility_score": 18,
+        },
+        "visibility_audit": {
+            "their_total_views_48h": 1_820,
+            "platform_breakdown": [
+                {"platform": "Twitter / X", "their_views": 720},
+                {"platform": "TikTok",      "their_views": 540},
+                {"platform": "Instagram",   "their_views": 385},
+                {"platform": "YouTube",     "their_views": 175},
+            ],
+        },
+        "competitor_visibility": {
+            "competitor_name": "StyleKing",
+            "competitor_total_views_48h": 56_000,
+            "platform_breakdown": [
+                {"platform": "Twitter / X", "their_views": 22_000},
+                {"platform": "TikTok",      "their_views": 18_500},
+                {"platform": "Instagram",   "their_views": 9_200},
+                {"platform": "YouTube",     "their_views": 6_300},
+            ],
+        },
+        "revenue_comparison": {
+            "own_revenue": "$100k",
+            "competitor_name": "StyleKing",
+            "competitor_revenue": "$200k",
+            "own_views_48h": 1_820,
+            "competitor_views_48h": 56_000,
+        },
+        "cost_analysis": {
+            "meta_cpm": 14.00,
+            "clipping_cpm": 0.70,
+        },
+        "lumina_fit_score": 91,
+        "lumina_pitch": (
+            "Jordan, UrbanEdge has strong craft but zero visibility. "
+            "Lumina would build your content engine — you focus on the chair."
+        ),
+    }
+    out = generate_pdf(sample, job_id="test_v3")
+    print(f"PDF: {out}")

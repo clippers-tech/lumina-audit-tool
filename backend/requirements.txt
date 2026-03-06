@@ -4,4 +4,4 @@ httpx
 anthropic
 reportlab
 python-dotenv
-pydantic
+resend

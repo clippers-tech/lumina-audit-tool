@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
 <!--
    ______                            __
@@ -17,90 +17,286 @@
 <meta name="author" content="Perplexity Computer">
 <meta property="og:see_also" content="https://www.perplexity.ai/computer">
 <link rel="author" href="https://www.perplexity.ai/computer">
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Lumina Clippers — LinkedIn Audit Tool</title>
-<link rel="stylesheet" href="style.css">
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Free Marketing Audit — Lumina Clippers</title>
+  <meta name="description" content="Get your free brand visibility audit. We'll analyse your brand, compare you to your top competitor, and deliver results to your inbox in 5 minutes.">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="Free Marketing Audit — Lumina Clippers">
+  <meta property="og:description" content="Get your free brand visibility audit delivered to your inbox in 5 minutes.">
+  <meta property="og:type" content="website">
+
+  <link rel="stylesheet" href="style.css">
+
+  <!-- JSON-LD structured data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "Lumina Clippers — Free Marketing Audit",
+    "description": "Free brand visibility audit delivered in 5 minutes.",
+    "creator": {
+      "@type": "SoftwareApplication",
+      "name": "Perplexity Computer",
+      "url": "https://www.perplexity.ai/computer"
+    }
+  }
+  </script>
 </head>
 <body>
-<div class="app">
+  <a href="#main-content" class="skip-nav">Skip to main content</a>
 
-  <!-- Header -->
-  <header class="header">
-    <div class="header-left">
-      <svg class="logo-icon" width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
-        <rect x="2" y="2" width="24" height="24" rx="4" stroke="currentColor" stroke-width="2" fill="none" style="color: var(--color-primary);"/>
-        <path d="M8 20V8h3v9h5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color: var(--color-primary);"/>
-      </svg>
-      <span class="logo">LUMINA</span>
-      <span class="header-subtitle">LinkedIn Audit Tool</span>
-    </div>
-  </header>
+  <div class="app">
 
-  <!-- Input bar -->
-  <div class="input-bar">
-    <input
-      class="input"
-      type="url"
-      id="url-input"
-      placeholder="Paste a LinkedIn profile URL — e.g., https://www.linkedin.com/in/someone"
-      autocomplete="off"
-      spellcheck="false"
-    >
-    <button class="btn btn-primary" id="analyze-btn" type="button">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
-      </svg>
-      Analyze
-    </button>
-  </div>
+    <!-- ===== HEADER ===== -->
+    <header class="site-header">
+      <a href="/" class="logo-link" aria-label="Lumina Clippers home">
+        <!-- SVG logo mark: stylised "L" in a rounded rectangle with gold accent -->
+        <svg class="logo-mark" width="40" height="40" viewBox="0 0 40 40" fill="none"
+             xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+          <rect width="40" height="40" rx="9" fill="#C9A84C" fill-opacity="0.12"/>
+          <rect x="0.5" y="0.5" width="39" height="39" rx="8.5" stroke="#C9A84C" stroke-opacity="0.4"/>
+          <!-- "L" letterform -->
+          <path d="M13 10H16.6V27.4H27V30.6H13V10Z" fill="#C9A84C"/>
+          <!-- Small accent clip mark -->
+          <path d="M20 13L23.5 16.5L20 20" stroke="#C9A84C" stroke-opacity="0.5"
+                stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
 
-  <!-- Error message area -->
-  <div id="input-error" class="input-error" style="display: none;" role="alert"></div>
+        <div class="logo-text">
+          <span class="logo-name">LUMINA</span>
+          <span class="logo-sub">Clippers</span>
+        </div>
+      </a>
+    </header>
 
-  <!-- In Progress section -->
-  <section class="section" id="progress-section" style="display: none;">
-    <h2 class="section-title">In Progress</h2>
-    <div id="progress-jobs"></div>
-  </section>
+    <!-- ===== MAIN ===== -->
+    <main id="main-content">
+      <h1 class="page-title">Get Your <span class="accent">Free</span> Clipping Audit</h1>
+      <p class="subheadline">
+        We'll analyse your brand visibility, compare you to your biggest competitor, and show you
+        exactly how much you're leaving on the table — delivered to your inbox in 5 minutes.
+      </p>
 
-  <!-- Completed section -->
-  <section class="section" id="completed-section" style="display: none;">
-    <h2 class="section-title">Completed</h2>
-    <div id="completed-jobs"></div>
-  </section>
+      <form id="audit-form" novalidate>
 
-  <!-- Failed section -->
-  <section class="section" id="failed-section" style="display: none;">
-    <h2 class="section-title">Failed</h2>
-    <div id="failed-jobs"></div>
-  </section>
+        <!-- REQUIRED section -->
+        <div class="form-section">
+          <div class="section-label">Required</div>
 
-  <!-- Empty state -->
-  <div class="empty-state" id="empty-state">
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin: 0 auto var(--space-4); color: var(--color-text-faint);">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
-      <circle cx="9" cy="7" r="4"/>
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87"/>
-      <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-    </svg>
-    <p>Paste a LinkedIn profile URL above to run an audit</p>
-    <p style="font-size: var(--text-xs); color: var(--color-text-faint); margin-top: var(--space-2);">
-      The tool will analyse the prospect's personal brand, company presence, and content strategy
-    </p>
-  </div>
+          <div class="field">
+            <label for="full_name">Full Name</label>
+            <input
+              type="text"
+              id="full_name"
+              name="full_name"
+              placeholder="Jane Smith"
+              autocomplete="name"
+              required
+            >
+          </div>
 
-  <!-- Footer -->
-  <footer class="footer">
-    <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer">Created with Perplexity Computer</a>
-  </footer>
+          <div class="field">
+            <label for="email">Work Email</label>
+            <input
+              type="email"
+              id="email"
+              name="email"
+              placeholder="jane@company.com"
+              autocomplete="email"
+              required
+            >
+          </div>
 
-</div>
+          <div class="field">
+            <label for="company_name">Company Name</label>
+            <input
+              type="text"
+              id="company_name"
+              name="company_name"
+              placeholder="Acme Inc."
+              autocomplete="organization"
+              required
+            >
+          </div>
 
-<!-- API Configuration: Update LUMINA_API_URL to your backend URL -->
-<script>
-  window.LUMINA_API_URL = "https://lumina-audit-api.onrender.com"; // Will be set after Render deploy
-</script>
-<script src="app.js"></script>
+          <div class="field">
+            <label for="industry">Industry</label>
+            <div class="select-wrapper">
+              <select id="industry" name="industry" required>
+                <option value="">Select your industry</option>
+                <option value="SaaS">SaaS</option>
+                <option value="E-commerce">E-commerce</option>
+                <option value="Creator / Personal Brand">Creator / Personal Brand</option>
+                <option value="Agency">Agency</option>
+                <option value="Fintech">Fintech</option>
+                <option value="Health & Wellness">Health &amp; Wellness</option>
+                <option value="Real Estate">Real Estate</option>
+                <option value="Crypto / Web3">Crypto / Web3</option>
+                <option value="Media / Entertainment">Media / Entertainment</option>
+                <option value="Other">Other</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- YOUR PROFILES section -->
+        <div class="form-section">
+          <div class="section-label">
+            Your Profiles
+            <span class="hint">(at least one required)</span>
+          </div>
+
+          <div class="field">
+            <label for="linkedin_url">
+              LinkedIn URL
+              <span class="optional-badge">optional</span>
+            </label>
+            <input
+              type="url"
+              id="linkedin_url"
+              name="linkedin_url"
+              placeholder="https://www.linkedin.com/in/yourname"
+              autocomplete="url"
+            >
+          </div>
+
+          <div class="field">
+            <label for="twitter_url">
+              Twitter / X URL
+              <span class="optional-badge">optional</span>
+            </label>
+            <input
+              type="url"
+              id="twitter_url"
+              name="twitter_url"
+              placeholder="https://x.com/yourhandle"
+              autocomplete="url"
+            >
+          </div>
+
+          <div class="field">
+            <label for="tiktok_url">
+              TikTok URL
+              <span class="optional-badge">optional</span>
+            </label>
+            <input
+              type="url"
+              id="tiktok_url"
+              name="tiktok_url"
+              placeholder="https://www.tiktok.com/@yourhandle"
+              autocomplete="url"
+            >
+          </div>
+
+          <div class="field">
+            <label for="youtube_url">
+              YouTube URL
+              <span class="optional-badge">optional</span>
+            </label>
+            <input
+              type="url"
+              id="youtube_url"
+              name="youtube_url"
+              placeholder="https://www.youtube.com/@yourchannel"
+              autocomplete="url"
+            >
+          </div>
+
+          <div class="field">
+            <label for="instagram_url">
+              Instagram URL
+              <span class="optional-badge">optional</span>
+            </label>
+            <input
+              type="url"
+              id="instagram_url"
+              name="instagram_url"
+              placeholder="https://www.instagram.com/yourhandle"
+              autocomplete="url"
+            >
+          </div>
+        </div>
+
+        <!-- YOUR BUSINESS section -->
+        <div class="form-section">
+          <div class="section-label">Your Business</div>
+
+          <div class="field">
+            <label for="own_revenue">
+              Estimated revenue last year
+              <span class="optional-badge">optional</span>
+            </label>
+            <input
+              type="text"
+              id="own_revenue"
+              name="own_revenue"
+              placeholder="e.g. $500,000"
+            >
+          </div>
+
+          <div class="field">
+            <label for="competitor_name">
+              Biggest competitor's name
+              <span class="optional-badge">optional</span>
+            </label>
+            <input
+              type="text"
+              id="competitor_name"
+              name="competitor_name"
+              placeholder="e.g. Nike"
+            >
+          </div>
+        </div>
+
+        <!-- Submit -->
+        <button type="submit" class="btn-primary" id="submit-btn" aria-label="Submit audit request">
+          <!-- Magnifying glass icon -->
+          <svg class="btn-icon" viewBox="0 0 18 18" fill="none"
+               xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+            <circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" stroke-width="2"/>
+            <path d="M11.5 11.5L16 16" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round"/>
+          </svg>
+          <span class="btn-text">Get My Free Audit</span>
+        </button>
+
+        <!-- Trust signals -->
+        <div class="trust-signals" aria-label="Trust indicators">
+          <span class="trust-item">
+            <span class="trust-check" aria-hidden="true">✓</span>
+            Free forever
+          </span>
+          <span class="trust-item">
+            <span class="trust-check" aria-hidden="true">✓</span>
+            No credit card
+          </span>
+          <span class="trust-item">
+            <span class="trust-check" aria-hidden="true">✓</span>
+            Delivered in 5 minutes
+          </span>
+        </div>
+
+      </form>
+
+      <!-- Error message -->
+      <div id="form-error" class="error-msg" role="alert" aria-live="assertive"></div>
+
+    </main>
+
+    <!-- ===== FOOTER ===== -->
+    <footer class="site-footer">
+      <p>
+        <a href="https://www.perplexity.ai/computer" target="_blank" rel="noopener noreferrer">
+          Created with Perplexity Computer
+        </a>
+      </p>
+    </footer>
+
+  </div><!-- /.app -->
+
+  <script src="app.js"></script>
 </body>
 </html>

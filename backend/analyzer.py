@@ -1,4 +1,10 @@
-"""analyzer.py — Claude API call for structured LinkedIn audit."""
+"""analyzer.py — Claude Step 5: generate the structured audit JSON.
+
+Receives the full assembled context (identity data, platform search results,
+competitor revenue, CPM data) and produces the complete audit output.
+
+The output JSON is consumed directly by pdf_generator.py v3 (dashboard-style).
+"""
 
 import os
 import json
@@ -6,95 +12,128 @@ from anthropic import AsyncAnthropic
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
-SYSTEM_PROMPT = """You are an expert brand strategist and LinkedIn audit analyst working for Lumina Clippers.
+SYSTEM_PROMPT = """You are an expert brand strategist and marketing audit analyst working for Lumina Clippers.
 
 ## About Lumina Clippers
 Lumina Clippers is a performance-based short-form content distribution platform with 62,900+ creators. Lumina clips long-form content into viral short-form videos distributed across TikTok, Instagram Reels, YouTube Shorts, and X. Clients pay per 1,000 views — fully performance-based with zero upfront risk. Lumina handles the entire content supply chain: clipping, editing, captioning, distribution, and analytics.
 
 ## Your Task
-Analyze the provided LinkedIn profile data, company data, and research summary. Produce a brutally honest audit identifying gaps where Lumina Clippers can specifically help. Be harsh with scoring — most prospects should score between 25-55 out of 100.
+Analyze the provided data and produce a structured marketing audit. This audit will be rendered as a 6-page dashboard-style PDF and emailed to the prospect.
 
-## Scoring Guide
-- 0-20: No online presence or content activity at all
-- 21-40: Minimal presence, major gaps everywhere
-- 41-60: Some effort but significant missed opportunities
-- 61-80: Decent presence but clear room for improvement
-- 81-100: Exceptional (almost nobody scores here)
+The PDF pages are:
+1. Visibility Score gauge (0-100)
+2. Brand Exposure — total views + per-platform breakdown
+3. Competitor Exposure — their total views + comparison bar + per-platform breakdown
+4. Revenue Comparison — side-by-side bar chart
+5. CPM Comparison — Meta Ads vs Clipping
+6. CTA — Lumina fit score + personalised pitch
+
+## CRITICAL: Data Noise Detection
+Search results OFTEN contain irrelevant data — unrelated accounts, brand-name collisions, viral content from other creators. You MUST:
+1. Strip noise from view counts — only count genuinely relevant brand mentions
+2. If 95% of results are unrelated, the real visibility is near zero
+3. Be harsh with scoring — most prospects should score 15-45
+
+## Scoring Guide — Visibility Score
+- 0-20: Invisible — no genuine organic mentions
+- 21-40: Barely visible — scattered presence, mostly noise
+- 41-60: Some traction — occasional real mentions but no strategy
+- 61-80: Solid presence — regular visibility, room for growth
+- 81-100: Dominant — they don't need us (almost nobody scores here)
 
 ## Output Format
-Return ONLY valid JSON matching this exact schema — no markdown, no explanation, no code fences:
+Return ONLY valid JSON matching this exact schema — no markdown, no code fences, no explanation:
 
 {
     "prospect": {
-        "name": "string — full name",
-        "headline": "string — their LinkedIn headline",
-        "company": "string — company name",
-        "score": 0-100,
-        "score_rationale": "string — 1 sentence explaining the score"
+        "name": "string",
+        "company": "string",
+        "industry": "string",
+        "visibility_score": 0-100,
+        "score_rationale": "string — 1 sentence"
     },
-    "personal_brand_gaps": [
-        {
-            "issue": "string — clear issue title",
-            "severity": "high" | "medium" | "low",
-            "evidence": "string — specific evidence from the data",
-            "fix": "string — actionable recommendation"
-        }
-    ],
-    "company_brand_gaps": [
-        {
-            "issue": "string",
-            "severity": "high" | "medium" | "low",
-            "evidence": "string",
-            "fix": "string"
-        }
-    ],
-    "content_strategy_gaps": [
-        {
-            "issue": "string",
-            "severity": "high" | "medium" | "low",
-            "evidence": "string",
-            "fix": "string"
-        }
-    ],
-    "quick_wins": ["string", "string", "string"],
-    "priority_actions": ["string", "string", "string", "string", "string"],
+    "visibility_audit": {
+        "their_total_views_48h": int,
+        "platform_breakdown": [
+            {
+                "platform": "string — e.g. Twitter / X, TikTok, Instagram, YouTube",
+                "their_views": int
+            }
+        ]
+    },
+    "competitor_visibility": {
+        "competitor_name": "string",
+        "competitor_total_views_48h": int,
+        "platform_breakdown": [
+            {
+                "platform": "string",
+                "their_views": int
+            }
+        ]
+    },
+    "revenue_comparison": {
+        "own_revenue": "string — as submitted, e.g. $500k",
+        "competitor_name": "string",
+        "competitor_revenue": "string — from research, e.g. $2M",
+        "own_views_48h": int,
+        "competitor_views_48h": int
+    },
+    "cost_analysis": {
+        "meta_cpm": float — average Meta Ads CPM for their industry (typically $8-$25),
+        "clipping_cpm": float — Lumina's effective CPM (typically $0.50-$1.50)
+    },
     "lumina_fit_score": 0-100,
-    "lumina_pitch": "string — exactly 2 sentences, personalised to this prospect, explaining how Lumina Clippers can help them specifically"
+    "lumina_pitch": "string — 2 sentences max, personalised, reference their visibility gap"
 }
 
 Rules:
-- personal_brand_gaps: 3-6 items
-- company_brand_gaps: 3-6 items
-- content_strategy_gaps: 3-6 items
-- quick_wins: exactly 3 items
-- priority_actions: exactly 5 items
-- Be specific with evidence — reference actual data points
-- lumina_fit_score: how well Lumina's services match this prospect's needs (higher = better fit)
-- lumina_pitch: personalised, reference their specific situation"""
+- visibility_score and lumina_fit_score are independent scores
+- their_total_views_48h = sum of platform views (after noise stripping)
+- competitor views should reflect real data from search results
+- own_views_48h and competitor_views_48h in revenue_comparison should match visibility totals
+- meta_cpm: use real industry average data (research provided). If unknown, estimate based on industry.
+- clipping_cpm: Lumina's performance-based model typically delivers $0.50-$1.50 CPM
+- lumina_pitch: personalised, reference their specific visibility gap and competitor. No fluff.
+- Keep ALL text minimal — this is a dashboard PDF, not a report. Numbers speak."""
 
 
-async def analyze(profile: dict, company: dict, research: dict) -> dict:
-    """Send all context to Claude and get structured JSON audit back."""
+async def analyze(
+    identity_data: dict,
+    search_results: dict,
+    research_data: dict,
+    form_data: dict,
+) -> dict:
+    """Send all context to Claude and get structured JSON audit back.
+
+    Args:
+        identity_data: identity profiles from Step 1
+        search_results: platform search results from Step 3
+        research_data: competitor revenue + CPM from Step 4
+        form_data: original form submission (name, email, company, industry, etc.)
+    """
     client = AsyncAnthropic(api_key=ANTHROPIC_API_KEY)
 
-    # Build user message with all context
-    # Strip raw data to avoid token bloat
-    profile_clean = {k: v for k, v in profile.items() if k != "raw"}
-    company_clean = {k: v for k, v in company.items() if k != "raw"}
+    # Build user message
+    user_message = f"""## Prospect Information (from form)
+Name: {form_data.get('full_name', 'Unknown')}
+Company: {form_data.get('company_name', 'Unknown')}
+Industry: {form_data.get('industry', 'Unknown')}
+Self-reported revenue: {form_data.get('own_revenue', 'Not provided')}
+Biggest competitor: {form_data.get('competitor_name', 'Not provided')}
 
-    user_message = f"""## LinkedIn Profile Data
-{json.dumps(profile_clean, indent=2, default=str)}
+## Identity Data (Step 1 — profile scrapes)
+{json.dumps(identity_data, indent=2, default=str)}
 
-## Company Data
-{json.dumps(company_clean, indent=2, default=str)}
+## Platform Search Results (Step 3 — brand mentions, last 48h)
+{json.dumps(search_results, indent=2, default=str)}
 
-## Research Summary
-{research.get('summary', 'No research available.')}
+## Competitor Revenue Research (Step 4)
+{research_data.get('competitor_revenue', 'Not available')}
 
-## Research Citations
-{json.dumps(research.get('citations', []), indent=2)}
+## CPM Cost Research (Step 4)
+{json.dumps(research_data.get('cpm_data', {}), indent=2, default=str)}
 
-Analyze this prospect and produce the audit JSON."""
+Produce the complete audit JSON now."""
 
     response = await client.messages.create(
         model="claude-sonnet-4-6",
@@ -103,23 +142,21 @@ Analyze this prospect and produce the audit JSON."""
         messages=[{"role": "user", "content": user_message}],
     )
 
-    # Extract text content
     text = response.content[0].text.strip()
 
-    # Strip markdown code fences if present
+    # Strip markdown fences if present
     if text.startswith("```"):
         lines = text.split("\n")
-        # Remove first line (```json or ```) and last line (```)
         lines = [l for l in lines if not l.strip().startswith("```")]
         text = "\n".join(lines)
 
     audit = json.loads(text)
 
-    # Validate required keys
+    # Validate required top-level keys
     required_keys = [
-        "prospect", "personal_brand_gaps", "company_brand_gaps",
-        "content_strategy_gaps", "quick_wins", "priority_actions",
-        "lumina_fit_score", "lumina_pitch"
+        "prospect", "visibility_audit", "competitor_visibility",
+        "revenue_comparison", "cost_analysis",
+        "lumina_fit_score", "lumina_pitch",
     ]
     for key in required_keys:
         if key not in audit:

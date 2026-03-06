@@ -1,9 +1,10 @@
+.env
 __pycache__/
 *.pyc
-.env
 *.db
-*.db-wal
 *.db-shm
+*.db-wal
 outputs/
-.DS_Store
+server.log
+.vercel/
 node_modules/

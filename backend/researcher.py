@@ -1,40 +1,23 @@
-"""researcher.py — Perplexity Agent API call for prospect/company research.
+"""researcher.py — Perplexity API: competitor revenue + CPM lookup.
 
-Uses Claude Sonnet 4.6 via Perplexity's Agent API with web search enabled
-for deep brand presence and content strategy research.
+Step 4 runs two parallel queries:
+  A) Competitor annual revenue estimate
+  B) CPM costs for the prospect's industry on TikTok, Instagram, YouTube
 """
 
 import os
 import json
+import asyncio
 import httpx
 
 PERPLEXITY_API_KEY = os.environ.get("PERPLEXITY_API_KEY", "")
-TIMEOUT = 120  # Agent API calls with web search can take longer
+TIMEOUT = 120
 
 
-async def research(name: str, company: str) -> dict:
-    """Query Perplexity Agent API with Claude Sonnet 4.6 + web search
-    for brand presence and content strategy intel.
-
-    Falls back gracefully if the API key is missing, expired, or quota exceeded.
-    """
+async def _perplexity_query(query: str, instructions: str) -> str:
+    """Run a single Perplexity Agent API query. Returns the text response."""
     if not PERPLEXITY_API_KEY:
-        print("[Researcher] No PERPLEXITY_API_KEY set — skipping research step.")
-        return _fallback_research(name, company)
-
-    instructions = (
-        "You are a brand research analyst. Research the given person and company "
-        "thoroughly using web search. Focus on: brand presence, content strategy, "
-        "online reputation, social media activity, content gaps, and opportunities "
-        "for improvement. Be specific and cite your sources."
-    )
-
-    query = (
-        f"Research {name} and their company {company}. "
-        f"Analyze their brand presence, content strategy, online reputation, "
-        f"social media activity, content gaps, and opportunities for improvement. "
-        f"Be thorough and specific."
-    )
+        return ""
 
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
@@ -48,53 +31,103 @@ async def research(name: str, company: str) -> dict:
                     "model": "anthropic/claude-sonnet-4-6",
                     "input": query,
                     "instructions": instructions,
-                    "max_output_tokens": 4096,
+                    "max_output_tokens": 2048,
                     "tools": [{"type": "web_search"}],
                 },
             )
             resp.raise_for_status()
             data = resp.json()
 
-        # Extract content from Agent API response format
         content = ""
-        citations = []
-
         for output_item in data.get("output", []):
-            # Extract search results as citations
-            if output_item.get("type") == "search_results":
-                for result in output_item.get("results", []):
-                    citations.append({
-                        "title": result.get("title", ""),
-                        "url": result.get("url", ""),
-                    })
-
-            # Extract message content
             if output_item.get("type") == "message":
-                for content_block in output_item.get("content", []):
-                    if content_block.get("type") == "output_text":
-                        content += content_block.get("text", "")
+                for block in output_item.get("content", []):
+                    if block.get("type") == "output_text":
+                        content += block.get("text", "")
+        return content
 
-        if not content:
-            print("[Researcher] Perplexity Agent API returned empty content — using fallback.")
-            return _fallback_research(name, company)
-
-        return {
-            "summary": content,
-            "citations": citations,
-        }
     except Exception as e:
-        print(f"[Researcher] Perplexity Agent API error: {e} — using fallback research.")
-        return _fallback_research(name, company)
+        print(f"[Researcher] Perplexity error: {e}")
+        return ""
 
 
-def _fallback_research(name: str, company: str) -> dict:
-    """Minimal research data when Perplexity is unavailable."""
+async def research_competitor_revenue(competitor_name: str, industry: str) -> str:
+    """Query A — estimated annual revenue for the competitor."""
+    query = (
+        f"What is the estimated annual revenue of {competitor_name} in {industry} "
+        f"for the most recent available year?"
+    )
+    instructions = (
+        "You are a financial research analyst. Find the most recent estimated annual "
+        "revenue figure for the company. Return a concise answer with the revenue "
+        "figure, the year it's from, and the source. If you can't find exact revenue, "
+        "provide the best estimate and explain why."
+    )
+    result = await _perplexity_query(query, instructions)
+    return result or f"Revenue data for {competitor_name} not available."
+
+
+async def research_cpm_costs(industry: str) -> dict:
+    """Query B — CPM costs for the industry across platforms."""
+    query = (
+        f"What is the average CPM (cost per 1000 views) for paid ads targeting "
+        f"{industry} audiences on TikTok, Instagram, and YouTube in 2025?"
+    )
+    instructions = (
+        "You are a digital advertising analyst. Find the average CPM rates for paid ads "
+        "on TikTok, Instagram, and YouTube for the given industry. Return your answer "
+        "as a concise summary with specific numbers per platform. If exact data isn't "
+        "available, provide industry benchmarks and explain your estimate."
+    )
+    result = await _perplexity_query(query, instructions)
+
+    # Try to extract structured CPM data; fall back to industry averages
+    cpm_data = _parse_cpm(result, industry)
+    return cpm_data
+
+
+def _parse_cpm(text: str, industry: str) -> dict:
+    """Best-effort extraction of CPM numbers from Perplexity's response.
+    Falls back to sensible industry averages if parsing fails.
+    """
+    import re
+
+    # Default CPMs by platform (industry averages in USD)
+    defaults = {"tiktok": 10.0, "instagram": 12.0, "youtube": 15.0}
+
+    cpm = {}
+    for platform in ["tiktok", "instagram", "youtube"]:
+        # Look for patterns like "TikTok: $X" or "TikTok CPM is $X"
+        pattern = rf"{platform}[^$]*\$(\d+(?:\.\d+)?)"
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            cpm[platform] = float(match.group(1))
+        else:
+            cpm[platform] = defaults[platform]
+
+    cost_100k = {
+        "tiktok": round(cpm["tiktok"] * 100, 2),
+        "instagram": round(cpm["instagram"] * 100, 2),
+        "youtube": round(cpm["youtube"] * 100, 2),
+    }
+    cost_100k["average"] = round(sum(cost_100k[p] for p in ["tiktok", "instagram", "youtube"]) / 3, 2)
+
     return {
-        "summary": (
-            f"Research for {name} at {company} was not available via external API. "
-            f"The audit should rely on the LinkedIn profile and company data provided. "
-            f"Assess brand presence based solely on the LinkedIn data — profile completeness, "
-            f"content activity, engagement metrics, headline quality, and company page presence."
-        ),
-        "citations": [],
+        "industry": industry,
+        "cpm_by_platform": cpm,
+        "cost_for_100k_views": cost_100k,
+        "raw_response": text,
+    }
+
+
+async def research(competitor_name: str, industry: str) -> dict:
+    """Run both research queries in parallel and return combined results."""
+    revenue_task = research_competitor_revenue(competitor_name, industry)
+    cpm_task = research_cpm_costs(industry)
+
+    revenue_text, cpm_data = await asyncio.gather(revenue_task, cpm_task)
+
+    return {
+        "competitor_revenue": revenue_text,
+        "cpm_data": cpm_data,
     }

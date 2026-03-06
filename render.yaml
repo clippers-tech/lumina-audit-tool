@@ -1,9 +1,9 @@
 services:
   - type: web
-    name: lumina-audit-api
+    name: lumina-audit-tool
     runtime: python
-    buildCommand: pip install -r backend/requirements.txt
-    startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: APIFY_TOKEN
         sync: false
@@ -11,5 +11,13 @@ services:
         sync: false
       - key: PERPLEXITY_API_KEY
         sync: false
-      - key: LI_COOKIES
+      - key: RESEND_API_KEY
+        sync: false
+      - key: FROM_EMAIL
+        sync: false
+      - key: REPLY_TO_EMAIL
+        sync: false
+      - key: INTERNAL_NOTIFY_EMAIL
+        sync: false
+      - key: CALENDLY_URL
         sync: false
