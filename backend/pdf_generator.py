@@ -3,6 +3,8 @@ Lumina Clippers Marketing Audit Tool — PDF Generator v3
 Dashboard-style: bold numbers, visual bars, minimal text, zero fluff.
 Sections: Gauge → Brand Visibility → Competitor Visibility → Revenue → CPM → CTA
 Packed tight — fewer pages, less whitespace.
+
+Brand: Deep forest green bg, bright lime-green accents, white text.
 """
 
 import os, math
@@ -21,23 +23,33 @@ from reportlab.platypus.flowables import Flowable
 from reportlab.pdfgen import canvas as pdfgen_canvas
 
 
-# ───────────────────── Brand colours ─────────────────────
-BG_PAGE     = colors.HexColor("#0D0D0D")
-BG_CARD     = colors.HexColor("#1A1A1A")
-BG_CARD_ALT = colors.HexColor("#151515")
-GOLD        = colors.HexColor("#C9A84C")
-GOLD_DIM    = colors.HexColor("#8A7333")
-TEXT_WHITE   = colors.HexColor("#F0F0F0")
-TEXT_MUTED   = colors.HexColor("#999999")
-TEXT_FAINT   = colors.HexColor("#555555")
+# ───────────────────── Brand colours — Lumina Clippers ───
+BG_PAGE     = colors.HexColor("#0a2e1a")   # Deep forest green
+BG_CARD     = colors.HexColor("#0d3320")   # Slightly lighter green
+BG_CARD_ALT = colors.HexColor("#0b2b17")   # Subtle variant
+ACCENT      = colors.HexColor("#4ade80")   # Bright lime green (primary accent)
+ACCENT_DIM  = colors.HexColor("#22c55e")   # Darker green accent
+TEXT_WHITE   = colors.HexColor("#FFFFFF")   # Pure white
+TEXT_MUTED   = colors.HexColor("#b0c4b0")   # Soft green-grey
+TEXT_FAINT   = colors.HexColor("#5a7a5a")   # Faint green
 RED          = colors.HexColor("#E74C3C")
-GREEN        = colors.HexColor("#27AE60")
-BLUE         = colors.HexColor("#3498DB")
-BAR_BG       = colors.HexColor("#2A2A2A")
+GREEN_GOOD   = colors.HexColor("#4ade80")   # Same as accent — for positive bars
+BAR_BG       = colors.HexColor("#163d26")   # Dark green bar background
+
+# Legacy aliases (used in some flowables)
+GOLD = ACCENT
+GOLD_DIM = ACCENT_DIM
 
 PAGE_W, PAGE_H = A4
 MARGIN    = 18 * mm
 CONTENT_W = PAGE_W - 2 * MARGIN
+
+
+# ── Path to bundled assets ──
+_ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
+_IMG_VOUCH  = os.path.join(_ASSETS_DIR, "vouch_dashboard.jpg")
+_IMG_WALL   = os.path.join(_ASSETS_DIR, "client_wall.jpg")
+_IMG_LOGO   = os.path.join(_ASSETS_DIR, "lumina_clippers_logo.jpg")
 
 
 # ───────────────────── Page background + footer ──────────
@@ -45,8 +57,14 @@ def _on_page(canv: pdfgen_canvas.Canvas, doc):
     canv.saveState()
     canv.setFillColor(BG_PAGE)
     canv.rect(0, 0, PAGE_W, PAGE_H, fill=1, stroke=0)
+
+    # Subtle top border accent
+    canv.setStrokeColor(ACCENT); canv.setLineWidth(1.5)
+    canv.line(0, PAGE_H - 1, PAGE_W, PAGE_H - 1)
+
+    # Footer
     fy = 10 * mm
-    canv.setStrokeColor(GOLD_DIM); canv.setLineWidth(0.3)
+    canv.setStrokeColor(ACCENT_DIM); canv.setLineWidth(0.3)
     canv.line(MARGIN, fy, PAGE_W - MARGIN, fy)
     canv.setFont("Helvetica", 6.5); canv.setFillColor(TEXT_FAINT)
     canv.drawString(MARGIN, fy - 4, "Lumina Clippers — Visibility Audit")
@@ -56,11 +74,12 @@ def _on_page(canv: pdfgen_canvas.Canvas, doc):
 
 # ───────────────────── Custom Flowables ──────────────────
 
-class GoldRule(Flowable):
+class AccentRule(Flowable):
+    """Horizontal accent line in lime green."""
     def __init__(self, width, thickness=0.5):
         super().__init__(); self.width = width; self.height = thickness
     def draw(self):
-        self.canv.setStrokeColor(GOLD); self.canv.setLineWidth(self.height)
+        self.canv.setStrokeColor(ACCENT); self.canv.setLineWidth(self.height)
         self.canv.line(0, 0, self.width, 0)
 
 
@@ -76,8 +95,8 @@ class GaugeArc(Flowable):
         self.canv.setStrokeColor(BAR_BG); self.canv.setLineWidth(14)
         self.canv.arc(cx - r, cy - r, cx + r, cy + r, 0, 180)
         if self.score < 30:   c = RED
-        elif self.score < 60: c = GOLD
-        else:                 c = GREEN
+        elif self.score < 60: c = colors.HexColor("#facc15")  # Yellow/amber
+        else:                 c = ACCENT
         self.canv.setStrokeColor(c); self.canv.setLineWidth(14)
         angle = self.score / 100 * 180
         self.canv.arc(cx - r, cy - r, cx + r, cy + r, 180, -angle)
@@ -90,13 +109,13 @@ class GaugeArc(Flowable):
 class HBar(Flowable):
     """Horizontal comparison bar — two values, filled proportionally."""
     def __init__(self, val_a, val_b, label_a, label_b, width=None, height=42,
-                 color_a=GOLD, color_b=RED):
+                 color_a=None, color_b=RED):
         super().__init__()
         self.width = width or CONTENT_W
         self.height = height
         self.val_a = max(val_a, 0); self.val_b = max(val_b, 0)
         self.label_a = label_a; self.label_b = label_b
-        self.color_a = color_a; self.color_b = color_b
+        self.color_a = color_a or ACCENT; self.color_b = color_b
 
     def draw(self):
         total = self.val_a + self.val_b
@@ -131,14 +150,14 @@ class VBarChart(Flowable):
     """Side-by-side vertical bar chart for two values."""
     def __init__(self, val_a, val_b, label_a, label_b,
                  name_a="You", name_b="Competitor",
-                 width=None, height=160, color_a=TEXT_WHITE, color_b=GOLD):
+                 width=None, height=160, color_a=TEXT_WHITE, color_b=None):
         super().__init__()
         self.width = width or CONTENT_W
         self.height = height
         self.val_a = val_a; self.val_b = val_b
         self.label_a = label_a; self.label_b = label_b
         self.name_a = name_a; self.name_b = name_b
-        self.color_a = color_a; self.color_b = color_b
+        self.color_a = color_a; self.color_b = color_b or ACCENT
 
     def draw(self):
         max_v = max(self.val_a, self.val_b, 1)
@@ -185,16 +204,16 @@ class CPMBars(Flowable):
         self.canv.setFillColor(RED)
         self.canv.roundRect(x_start, y1 - 18, bar_w, 14, 3, fill=1, stroke=0)
         y2 = y1 - 50
-        self.canv.setFont("Helvetica-Bold", 10); self.canv.setFillColor(GREEN)
+        self.canv.setFont("Helvetica-Bold", 10); self.canv.setFillColor(ACCENT)
         self.canv.drawString(x_start, y2 + 2, f"Clipping  —  ${self.cpm_clip:.2f} CPM")
         clip_w = max(6, bar_w * self.cpm_clip / max(self.cpm_ads, 0.01))
         self.canv.setFillColor(BAR_BG)
         self.canv.roundRect(x_start, y2 - 18, bar_w, 14, 3, fill=1, stroke=0)
-        self.canv.setFillColor(GREEN)
+        self.canv.setFillColor(ACCENT)
         self.canv.roundRect(x_start, y2 - 18, clip_w, 14, 3, fill=1, stroke=0)
         if self.cpm_clip > 0:
             mult = self.cpm_ads / self.cpm_clip
-            self.canv.setFont("Helvetica-Bold", 18); self.canv.setFillColor(GOLD)
+            self.canv.setFont("Helvetica-Bold", 18); self.canv.setFillColor(ACCENT)
             self.canv.drawCentredString(self.width / 2, y2 - 48, f"{mult:.0f}x cheaper")
 
 
@@ -203,24 +222,24 @@ def _styles():
     base = dict(fontName="Helvetica", textColor=TEXT_WHITE, backColor=None, spaceAfter=2)
     def s(name, **kw): return ParagraphStyle(name, **{**base, **kw})
     return {
-        "brand":      s("brand", fontSize=36, leading=42, textColor=GOLD,
+        "brand":      s("brand", fontSize=36, leading=42, textColor=ACCENT,
                          alignment=TA_CENTER, fontName="Helvetica-Bold"),
         "brand_sub":  s("brand_sub", fontSize=13, leading=16, textColor=TEXT_MUTED,
                          alignment=TA_CENTER),
-        "h1":         s("h1", fontSize=20, leading=24, textColor=GOLD,
+        "h1":         s("h1", fontSize=20, leading=24, textColor=ACCENT,
                          fontName="Helvetica-Bold", spaceAfter=2),
-        "h2":         s("h2", fontSize=14, leading=18, textColor=GOLD,
+        "h2":         s("h2", fontSize=14, leading=18, textColor=ACCENT,
                          fontName="Helvetica-Bold", spaceAfter=2),
         "big_num":    s("big_num", fontSize=44, leading=50, textColor=TEXT_WHITE,
                          alignment=TA_CENTER, fontName="Helvetica-Bold"),
-        "big_gold":   s("big_gold", fontSize=44, leading=50, textColor=GOLD,
+        "big_accent": s("big_accent", fontSize=44, leading=50, textColor=ACCENT,
                          alignment=TA_CENTER, fontName="Helvetica-Bold"),
         "label":      s("label", fontSize=10, leading=13, textColor=TEXT_MUTED,
                          alignment=TA_CENTER),
         "label_left": s("label_left", fontSize=10, leading=13, textColor=TEXT_MUTED),
         "card_num":   s("card_num", fontSize=22, leading=26, textColor=TEXT_WHITE,
                          alignment=TA_CENTER, fontName="Helvetica-Bold"),
-        "card_gold":  s("card_gold", fontSize=22, leading=26, textColor=GOLD,
+        "card_accent":s("card_accent", fontSize=22, leading=26, textColor=ACCENT,
                          alignment=TA_CENTER, fontName="Helvetica-Bold"),
         "card_label": s("card_label", fontSize=9, leading=12, textColor=TEXT_MUTED,
                          alignment=TA_CENTER, fontName="Helvetica-Bold"),
@@ -233,11 +252,14 @@ def _styles():
         "date":       s("date", fontSize=8, leading=11, textColor=TEXT_FAINT,
                          alignment=TA_CENTER),
         "body":       s("body", fontSize=10, leading=14, textColor=TEXT_MUTED),
-        "cta_big":    s("cta_big", fontSize=20, leading=26, textColor=GOLD,
+        "cta_big":    s("cta_big", fontSize=20, leading=26, textColor=ACCENT,
                          alignment=TA_CENTER, fontName="Helvetica-Bold"),
         "cta_email":  s("cta_email", fontSize=11, leading=14, textColor=TEXT_MUTED,
                          alignment=TA_CENTER),
         "bullet":     s("bullet", fontSize=10, leading=14, textColor=TEXT_WHITE),
+        # Legacy aliases
+        "card_gold":  s("card_gold", fontSize=22, leading=26, textColor=ACCENT,
+                         alignment=TA_CENTER, fontName="Helvetica-Bold"),
     }
 
 
@@ -267,7 +289,7 @@ def _platform_cards(platforms, styles, card_style="card_num"):
         ], colWidths=[(CONTENT_W - 20) / 2])
         inner.setStyle(TableStyle([
             ("BACKGROUND",   (0,0),(-1,-1), BG_CARD),
-            ("BOX",          (0,0),(-1,-1), 0.5, GOLD_DIM),
+            ("BOX",          (0,0),(-1,-1), 0.5, ACCENT_DIM),
             ("ALIGN",        (0,0),(-1,-1), "CENTER"),
             ("TOPPADDING",   (0,0),(-1,-1), 6),
             ("BOTTOMPADDING",(0,0),(-1,-1), 6),
@@ -297,7 +319,7 @@ def _platform_cards(platforms, styles, card_style="card_num"):
 # ═══════════════════════════════════════════════════════════
 
 def _page1_score(story, audit, styles):
-    """PAGE 1 — Visibility Score gauge + prospect info."""
+    """PAGE 1 — Logo + Visibility Score gauge + prospect info."""
     p = audit.get("prospect", {})
     score    = int(_safe(p, "visibility_score", default=0))
     name     = _safe(p, "name", default="Prospect")
@@ -305,12 +327,21 @@ def _page1_score(story, audit, styles):
     industry = _safe(p, "industry", default="")
     today    = datetime.now().strftime("%B %d, %Y")
 
-    story.append(Spacer(1, 14*mm))
-    story.append(Paragraph("LUMINA CLIPPERS", styles["brand"]))
-    story.append(Spacer(1, 1*mm))
+    story.append(Spacer(1, 8*mm))
+
+    # Logo
+    if os.path.exists(_IMG_LOGO):
+        logo = Image(_IMG_LOGO, width=180, height=45, kind='proportional')
+        logo.hAlign = 'CENTER'
+        story.append(logo)
+        story.append(Spacer(1, 4*mm))
+    else:
+        story.append(Paragraph("LUMINA CLIPPERS", styles["brand"]))
+        story.append(Spacer(1, 1*mm))
+
     story.append(Paragraph("Visibility Audit", styles["brand_sub"]))
     story.append(Spacer(1, 6*mm))
-    story.append(GoldRule(CONTENT_W))
+    story.append(AccentRule(CONTENT_W))
     story.append(Spacer(1, 8*mm))
 
     gauge = GaugeArc(score, width=200, height=100)
@@ -333,7 +364,7 @@ def _page1_score(story, audit, styles):
     story.append(scale)
 
     story.append(Spacer(1, 8*mm))
-    story.append(GoldRule(CONTENT_W))
+    story.append(AccentRule(CONTENT_W))
     story.append(Spacer(1, 4*mm))
     story.append(Paragraph(name, styles["name"]))
     if company or industry:
@@ -351,7 +382,7 @@ def _page2_brand_visibility(story, audit, styles):
     plats = _safe(vis, "platform_breakdown", default=[]) or []
 
     story.append(Paragraph("Brand Exposure", styles["h1"]))
-    story.append(GoldRule(CONTENT_W))
+    story.append(AccentRule(CONTENT_W))
     story.append(Spacer(1, 4*mm))
 
     story.append(Paragraph(_fmt(total), styles["big_num"]))
@@ -376,20 +407,20 @@ def _page3_competitor(story, audit, styles):
 
     story.append(Spacer(1, 6*mm))
     story.append(Paragraph("Competitor Exposure", styles["h1"]))
-    story.append(GoldRule(CONTENT_W))
+    story.append(AccentRule(CONTENT_W))
     story.append(Spacer(1, 3*mm))
 
     bar = HBar(int(your_total), int(c_total),
-               "Your Brand", c_name, color_a=GOLD, color_b=RED)
+               "Your Brand", c_name, color_a=ACCENT, color_b=RED)
     bar.hAlign = "CENTER"
     story.append(bar)
     story.append(Spacer(1, 4*mm))
 
-    story.append(Paragraph(_fmt(c_total), styles["big_gold"]))
+    story.append(Paragraph(_fmt(c_total), styles["big_accent"]))
     story.append(Paragraph(f"{c_name} views (past 48 hours)", styles["label"]))
     story.append(Spacer(1, 4*mm))
 
-    for el in _platform_cards(c_plats, styles, "card_gold"):
+    for el in _platform_cards(c_plats, styles, "card_accent"):
         story.append(el)
 
     story.append(PageBreak())
@@ -424,13 +455,13 @@ def _page4_revenue(story, audit, styles):
     comp_v = _parse_dollar(comp_rev_str)
 
     story.append(Paragraph("Revenue Comparison", styles["h1"]))
-    story.append(GoldRule(CONTENT_W))
+    story.append(AccentRule(CONTENT_W))
     story.append(Spacer(1, 5*mm))
 
     chart = VBarChart(own_v, comp_v,
                       own_rev_str, comp_rev_str,
                       name_a="You", name_b=comp_name,
-                      color_a=TEXT_WHITE, color_b=GOLD,
+                      color_a=TEXT_WHITE, color_b=ACCENT,
                       height=150)
     chart.hAlign = "CENTER"
     story.append(chart)
@@ -444,17 +475,17 @@ def _page4_revenue(story, audit, styles):
     ], colWidths=[half])
     left.setStyle(TableStyle([
         ("BACKGROUND",(0,0),(-1,-1), BG_CARD),
-        ("BOX",(0,0),(-1,-1),0.5,GOLD_DIM),
+        ("BOX",(0,0),(-1,-1),0.5,ACCENT_DIM),
         ("ALIGN",(0,0),(-1,-1),"CENTER"),
         ("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),
     ]))
     right = Table([
         [Paragraph(f"{comp_name.upper()} REVENUE{' (Est.)' if is_estimate else ''}", styles["card_label"])],
-        [Paragraph(str(comp_rev_str), styles["card_gold"])],
+        [Paragraph(str(comp_rev_str), styles["card_accent"])],
     ], colWidths=[half])
     right.setStyle(TableStyle([
         ("BACKGROUND",(0,0),(-1,-1), BG_CARD),
-        ("BOX",(0,0),(-1,-1),0.5,GOLD),
+        ("BOX",(0,0),(-1,-1),0.5,ACCENT),
         ("ALIGN",(0,0),(-1,-1),"CENTER"),
         ("TOPPADDING",(0,0),(-1,-1),8),("BOTTOMPADDING",(0,0),(-1,-1),8),
     ]))
@@ -477,7 +508,7 @@ def _page5_cpm(story, audit, styles):
 
     story.append(Spacer(1, 6*mm))
     story.append(Paragraph("Cost Analysis", styles["h1"]))
-    story.append(GoldRule(CONTENT_W))
+    story.append(AccentRule(CONTENT_W))
     story.append(Spacer(1, 2*mm))
     story.append(Paragraph(f"{industry} — Average Meta Ads CPM", styles["label"]))
     story.append(Spacer(1, 5*mm))
@@ -489,7 +520,7 @@ def _page5_cpm(story, audit, styles):
 
     bp_style = ParagraphStyle("bullet_point", parent=styles["bullet"],
                                bulletFontName="Helvetica-Bold", bulletFontSize=12,
-                               bulletColor=GOLD, leftIndent=18, bulletIndent=0,
+                               bulletColor=ACCENT, leftIndent=18, bulletIndent=0,
                                spaceBefore=3, spaceAfter=3,
                                backColor=BG_CARD)
     b1 = Paragraph("<bullet>\u2022</bullet>Clips live forever \u2014 compounding views at zero marginal cost", bp_style)
@@ -501,20 +532,23 @@ def _page5_cpm(story, audit, styles):
     story.append(PageBreak())
 
 
-# ── Path to bundled CTA assets ──
-_ASSETS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets")
-_IMG_VOUCH  = os.path.join(_ASSETS_DIR, "vouch_dashboard.jpg")
-_IMG_WALL   = os.path.join(_ASSETS_DIR, "client_wall.jpg")
-
-
 def _page6_cta(story, audit, styles):
-    """CTA page: two proof images + contact info."""
+    """CTA page: logo + two proof images + contact info."""
     story.append(Spacer(1, 4*mm))
-    story.append(Paragraph("LUMINA CLIPPERS", styles["brand"]))
-    story.append(Spacer(1, 1*mm))
+
+    # Logo
+    if os.path.exists(_IMG_LOGO):
+        logo = Image(_IMG_LOGO, width=180, height=45, kind='proportional')
+        logo.hAlign = 'CENTER'
+        story.append(logo)
+        story.append(Spacer(1, 2*mm))
+    else:
+        story.append(Paragraph("LUMINA CLIPPERS", styles["brand"]))
+        story.append(Spacer(1, 1*mm))
+
     story.append(Paragraph("Content Tracking Dashboard", styles["brand_sub"]))
     story.append(Spacer(1, 3*mm))
-    story.append(GoldRule(CONTENT_W))
+    story.append(AccentRule(CONTENT_W))
     story.append(Spacer(1, 4*mm))
 
     img_w = CONTENT_W
@@ -532,11 +566,11 @@ def _page6_cta(story, audit, styles):
         story.append(img2)
     story.append(Spacer(1, 4*mm))
 
-    story.append(GoldRule(CONTENT_W))
+    story.append(AccentRule(CONTENT_W))
     story.append(Spacer(1, 3*mm))
     story.append(Paragraph("Book Your Free Strategy Call", styles["cta_big"]))
     story.append(Spacer(1, 2*mm))
-    story.append(Paragraph('<a href="mailto:rhys@luminaclippers.com" color="#999999">rhys@luminaclippers.com</a>', styles["cta_email"]))
+    story.append(Paragraph('<a href="mailto:rhys@luminaclippers.com" color="#b0c4b0">rhys@luminaclippers.com</a>', styles["cta_email"]))
     story.append(Spacer(1, 1*mm))
     story.append(Paragraph("luminaclippers.com", styles["date"]))
 
@@ -557,7 +591,7 @@ def generate_pdf(audit: dict, job_id: str, output_dir: str = "outputs") -> str:
         leftMargin=MARGIN, rightMargin=MARGIN,
         topMargin=MARGIN, bottomMargin=18*mm,
         title="Lumina Clippers Visibility Audit",
-        author="Perplexity Computer",
+        author="Lumina Clippers",
     )
     st = _styles()
     story = []
@@ -604,7 +638,8 @@ if __name__ == "__main__":
         "revenue_comparison": {
             "own_revenue": "$100k",
             "competitor_name": "StyleKing",
-            "competitor_revenue": "$200k",
+            "competitor_revenue": "~$200k",
+            "competitor_revenue_is_estimate": True,
             "own_views_48h": 1_820,
             "competitor_views_48h": 56_000,
         },
@@ -618,5 +653,5 @@ if __name__ == "__main__":
             "Lumina would build your content engine — you focus on the chair."
         ),
     }
-    out = generate_pdf(sample, job_id="test_v3")
+    out = generate_pdf(sample, job_id="test_v4_green")
     print(f"PDF: {out}")
