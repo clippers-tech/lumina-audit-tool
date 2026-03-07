@@ -133,6 +133,12 @@ body {
   display: block;
 }
 
+.logo-img {
+  height: 40px;
+  width: auto;
+  border-radius: 6px;
+}
+
 .logo-text {
   display: flex;
   flex-direction: column;

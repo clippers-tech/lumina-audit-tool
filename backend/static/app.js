@@ -49,37 +49,23 @@ document.getElementById("audit-form").addEventListener("submit", async (e) => {
     return;
   }
 
-  // Submit
+  // Show loading state
   const btn = document.getElementById("submit-btn");
   btn.classList.add("loading");
   btn.disabled = true;
 
-  try {
-    const resp = await fetch(`${API}/api/audit`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
+  // Fire the API call in the background — don't wait for it
+  fetch(`${API}/api/audit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  }).catch(() => {
+    // Silently ignore — the audit runs server-side regardless
+  });
 
-    if (!resp.ok) {
-      const err = await resp.json().catch(() => ({}));
-      throw new Error(err.detail || "Something went wrong. Please try again.");
-    }
-
-    const result = await resp.json();
-
-    // Redirect to confirm page with email and job_id
-    const params = new URLSearchParams({
-      email: data.email,
-      job_id: result.job_id || "",
-    });
-    window.location.href = `confirm.html?${params.toString()}`;
-
-  } catch (err) {
-    showError(err.message);
-    btn.classList.remove("loading");
-    btn.disabled = false;
-  }
+  // Redirect immediately to the confirm/book page
+  const params = new URLSearchParams({ email: data.email });
+  window.location.href = `confirm.html?${params.toString()}`;
 });
 
 function getValue(id) {
