@@ -54,16 +54,31 @@ document.getElementById("audit-form").addEventListener("submit", async (e) => {
   btn.classList.add("loading");
   btn.disabled = true;
 
-  // Fire the API call in the background — don't wait for it
-  fetch(`${API}/api/audit`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(data),
-  }).catch(() => {
-    // Silently ignore — the audit runs server-side regardless
-  });
+  // Send the audit request using keepalive fetch so it survives page navigation.
+  // Also use sendBeacon as a fallback — belt and suspenders.
+  const payload = JSON.stringify(data);
+  const endpoint = `${API}/api/audit`;
 
-  // Redirect immediately to the confirm/book page
+  // Primary: fetch with keepalive (survives navigation, supports headers)
+  try {
+    fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: payload,
+      keepalive: true,
+    }).catch(() => {});
+  } catch (_) {
+    // Fallback: sendBeacon (always survives navigation but limited to ~64KB)
+    try {
+      const blob = new Blob([payload], { type: "application/json" });
+      navigator.sendBeacon(endpoint, blob);
+    } catch (_) {}
+  }
+
+  // Brief pause to let the request leave the browser before navigating
+  await new Promise((r) => setTimeout(r, 300));
+
+  // Redirect to the confirm/book page
   const params = new URLSearchParams({ email: data.email });
   window.location.href = `confirm.html?${params.toString()}`;
 });
