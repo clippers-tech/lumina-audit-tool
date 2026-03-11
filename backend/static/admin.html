@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Submissions — Lumina Clippers Admin</title>
+  <meta name="robots" content="noindex, nofollow">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #0A0A0A;
+      color: #E8E8E8;
+      min-height: 100vh;
+      padding: 24px;
+    }
+
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #2A2A2A;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .header-left img {
+      height: 36px;
+      width: auto;
+      border-radius: 6px;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+    }
+
+    .header h1 span { color: #C9A84C; }
+
+    .stats {
+      display: flex;
+      gap: 24px;
+      font-size: 13px;
+      color: #888;
+    }
+
+    .stats strong {
+      color: #C9A84C;
+      font-weight: 600;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .search-box {
+      padding: 8px 14px;
+      background: #181818;
+      border: 1px solid #2A2A2A;
+      border-radius: 8px;
+      color: #E8E8E8;
+      font-family: inherit;
+      font-size: 13px;
+      width: 240px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .search-box:focus {
+      border-color: #C9A84C;
+    }
+
+    .search-box::placeholder { color: #555; }
+
+    .btn {
+      padding: 8px 16px;
+      background: #C9A84C;
+      color: #0A0A0A;
+      border: none;
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+
+    .btn:hover { background: #D4B86A; }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid #2A2A2A;
+      color: #888;
+    }
+
+    .btn-outline:hover {
+      border-color: #555;
+      color: #E8E8E8;
+      background: transparent;
+    }
+
+    .auto-refresh {
+      font-size: 12px;
+      color: #555;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .auto-refresh .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #27AE60;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* Table */
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid #2A2A2A;
+      border-radius: 10px;
+      background: #111111;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    thead th {
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: #888;
+      background: #151515;
+      border-bottom: 1px solid #2A2A2A;
+      position: sticky;
+      top: 0;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    thead th:hover { color: #C9A84C; }
+    thead th.sorted { color: #C9A84C; }
+
+    tbody tr {
+      border-bottom: 1px solid #1E1E1E;
+      transition: background 0.15s;
+    }
+
+    tbody tr:hover { background: #1A1A1A; }
+    tbody tr:last-child { border-bottom: none; }
+
+    td {
+      padding: 10px 16px;
+      color: #CCC;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+
+    .status-complete {
+      background: rgba(39, 174, 96, 0.15);
+      color: #27AE60;
+    }
+
+    .status-failed {
+      background: rgba(231, 76, 60, 0.15);
+      color: #E74C3C;
+    }
+
+    .status-running {
+      background: rgba(201, 168, 76, 0.15);
+      color: #C9A84C;
+    }
+
+    .score {
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .score-high { color: #27AE60; }
+    .score-mid { color: #C9A84C; }
+    .score-low { color: #E74C3C; }
+
+    .url-link {
+      color: #6EAADC;
+      text-decoration: none;
+      font-size: 12px;
+    }
+
+    .url-link:hover { text-decoration: underline; }
+
+    .empty-state {
+      text-align: center;
+      padding: 64px 24px;
+      color: #555;
+    }
+
+    .empty-state h2 {
+      font-size: 18px;
+      color: #888;
+      margin-bottom: 8px;
+    }
+
+    .download-link {
+      color: #6EAADC;
+      text-decoration: none;
+      font-size: 12px;
+    }
+
+    .download-link:hover { text-decoration: underline; }
+
+    @media (max-width: 768px) {
+      body { padding: 16px; }
+      .search-box { width: 100%; }
+      .controls { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div>
+      <div class="header-left">
+        <img src="logo.jpg" alt="Lumina Clippers">
+        <h1><span>Lumina Clippers</span> — Submissions</h1>
+      </div>
+      <div class="stats" id="stats"></div>
+    </div>
+    <div class="controls">
+      <input type="text" class="search-box" id="search" placeholder="Search name, email, company...">
+      <button class="btn" onclick="exportCSV()">Export CSV</button>
+      <button class="btn btn-outline" onclick="loadJobs()">Refresh</button>
+      <div class="auto-refresh"><div class="dot"></div> Auto-refreshes every 30s</div>
+    </div>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th data-key="created_at" class="sorted">Date</th>
+          <th data-key="full_name">Name</th>
+          <th data-key="email">Email</th>
+          <th data-key="company_name">Company</th>
+          <th data-key="industry">Industry</th>
+          <th data-key="status">Status</th>
+          <th data-key="visibility_score">Vis. Score</th>
+          <th data-key="lumina_fit_score">Fit Score</th>
+          <th data-key="combined_views_48h">Views (48h)</th>
+          <th>Profiles</th>
+          <th>Competitor</th>
+          <th>Revenue</th>
+          <th>PDF</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const API = "";  // same origin
+    let allJobs = [];
+    let sortKey = "created_at";
+    let sortAsc = false;
+
+    async function loadJobs() {
+      try {
+        const resp = await fetch(`${API}/api/jobs`);
+        allJobs = await resp.json();
+        renderTable();
+        updateStats();
+      } catch (e) {
+        console.error("Failed to load jobs:", e);
+      }
+    }
+
+    function updateStats() {
+      const total = allJobs.length;
+      const complete = allJobs.filter(j => j.status === "complete").length;
+      const failed = allJobs.filter(j => j.status === "failed").length;
+      const running = total - complete - failed;
+      document.getElementById("stats").innerHTML =
+        `<span><strong>${total}</strong> total</span>` +
+        `<span><strong>${complete}</strong> complete</span>` +
+        (running > 0 ? `<span><strong>${running}</strong> in progress</span>` : '') +
+        (failed > 0 ? `<span><strong>${failed}</strong> failed</span>` : '');
+    }
+
+    function renderTable() {
+      const query = (document.getElementById("search").value || "").toLowerCase();
+      let filtered = allJobs;
+      if (query) {
+        filtered = allJobs.filter(j =>
+          (j.full_name || "").toLowerCase().includes(query) ||
+          (j.email || "").toLowerCase().includes(query) ||
+          (j.company_name || "").toLowerCase().includes(query) ||
+          (j.industry || "").toLowerCase().includes(query)
+        );
+      }
+
+      // Sort
+      filtered.sort((a, b) => {
+        let va = a[sortKey] ?? "";
+        let vb = b[sortKey] ?? "";
+        if (typeof va === "number" && typeof vb === "number") {
+          return sortAsc ? va - vb : vb - va;
+        }
+        va = String(va).toLowerCase();
+        vb = String(vb).toLowerCase();
+        return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+      });
+
+      const tbody = document.getElementById("tbody");
+      if (filtered.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="13"><div class="empty-state"><h2>No submissions yet</h2><p>Submissions will appear here in real time.</p></div></td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(j => {
+        const date = j.created_at ? new Date(j.created_at).toLocaleString("en-GB", {
+          day: "2-digit", month: "short", year: "numeric",
+          hour: "2-digit", minute: "2-digit", hour12: false
+        }) : "-";
+
+        const statusClass = j.status === "complete" ? "status-complete" :
+                            j.status === "failed" ? "status-failed" : "status-running";
+        const statusLabel = j.status === "complete" ? "Complete" :
+                            j.status === "failed" ? "Failed" : `Step ${j.step || "?"}`;
+
+        const visScore = j.visibility_score != null ? j.visibility_score : "-";
+        const fitScore = j.lumina_fit_score != null ? j.lumina_fit_score : "-";
+        const views = j.combined_views_48h != null ? Number(j.combined_views_48h).toLocaleString() : "-";
+
+        const scoreClass = (v) => v >= 70 ? "score-high" : v >= 40 ? "score-mid" : "score-low";
+
+        // Profile links
+        const profiles = [];
+        if (j.twitter_url) profiles.push(`<a href="${esc(j.twitter_url)}" target="_blank" class="url-link">X</a>`);
+        if (j.instagram_url) profiles.push(`<a href="${esc(j.instagram_url)}" target="_blank" class="url-link">IG</a>`);
+        if (j.tiktok_url) profiles.push(`<a href="${esc(j.tiktok_url)}" target="_blank" class="url-link">TT</a>`);
+        if (j.youtube_url) profiles.push(`<a href="${esc(j.youtube_url)}" target="_blank" class="url-link">YT</a>`);
+        if (j.linkedin_url) profiles.push(`<a href="${esc(j.linkedin_url)}" target="_blank" class="url-link">LI</a>`);
+
+        const pdf = j.status === "complete"
+          ? `<a href="${API}/api/download/${j.id}" class="download-link">Download</a>`
+          : "-";
+
+        return `<tr>
+          <td>${date}</td>
+          <td style="color:#E8E8E8;font-weight:500">${esc(j.full_name)}</td>
+          <td><a href="mailto:${esc(j.email)}" class="url-link">${esc(j.email)}</a></td>
+          <td>${esc(j.company_name)}</td>
+          <td>${esc(j.industry)}</td>
+          <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+          <td class="score ${typeof visScore === 'number' ? scoreClass(visScore) : ''}">${visScore}</td>
+          <td class="score ${typeof fitScore === 'number' ? scoreClass(fitScore) : ''}">${fitScore}</td>
+          <td style="font-variant-numeric:tabular-nums">${views}</td>
+          <td>${profiles.join(" ") || "-"}</td>
+          <td>${esc(j.competitor_name || "-")}</td>
+          <td>${esc(j.own_revenue || "-")}</td>
+          <td>${pdf}</td>
+        </tr>`;
+      }).join("");
+    }
+
+    function esc(str) {
+      if (!str) return "";
+      const d = document.createElement("div");
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    // Sorting
+    document.querySelectorAll("thead th[data-key]").forEach(th => {
+      th.addEventListener("click", () => {
+        const key = th.dataset.key;
+        if (sortKey === key) {
+          sortAsc = !sortAsc;
+        } else {
+          sortKey = key;
+          sortAsc = false;
+        }
+        document.querySelectorAll("thead th").forEach(t => t.classList.remove("sorted"));
+        th.classList.add("sorted");
+        renderTable();
+      });
+    });
+
+    // Search
+    document.getElementById("search").addEventListener("input", renderTable);
+
+    // CSV export
+    function exportCSV() {
+      const headers = ["Date","Name","Email","Company","Industry","Status","Visibility Score","Fit Score","Views 48h","Competitor","Revenue","Twitter","Instagram","TikTok","YouTube","LinkedIn"];
+      const rows = allJobs.map(j => [
+        j.created_at || "",
+        j.full_name || "",
+        j.email || "",
+        j.company_name || "",
+        j.industry || "",
+        j.status || "",
+        j.visibility_score ?? "",
+        j.lumina_fit_score ?? "",
+        j.combined_views_48h ?? "",
+        j.competitor_name || "",
+        j.own_revenue || "",
+        j.twitter_url || "",
+        j.instagram_url || "",
+        j.tiktok_url || "",
+        j.youtube_url || "",
+        j.linkedin_url || "",
+      ]);
+
+      const csv = [headers, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `lumina_submissions_${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Init + auto-refresh
+    loadJobs();
+    setInterval(loadJobs, 30000);
+  </script>
+</body>
+</html>
