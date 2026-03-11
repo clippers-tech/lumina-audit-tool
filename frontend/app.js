@@ -75,8 +75,16 @@ document.getElementById("audit-form").addEventListener("submit", async (e) => {
     } catch (_) {}
   }
 
-  // Brief pause to let the request leave the browser before navigating
-  await new Promise((r) => setTimeout(r, 300));
+  // Fire Meta Pixel Lead event for ad conversion tracking
+  if (typeof fbq === "function") {
+    fbq("track", "Lead", {
+      content_name: data.company_name,
+      content_category: data.industry,
+    });
+  }
+
+  // Brief pause to let the request + pixel event leave the browser
+  await new Promise((r) => setTimeout(r, 500));
 
   // Redirect to the confirm/book page
   const params = new URLSearchParams({ email: data.email });
