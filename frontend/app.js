@@ -54,6 +54,16 @@ document.getElementById("audit-form").addEventListener("submit", async (e) => {
   btn.classList.add("loading");
   btn.disabled = true;
 
+  // Read Meta cookies for Conversions API attribution
+  const getCookie = (name) => {
+    const m = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
+    return m ? decodeURIComponent(m[1]) : null;
+  };
+  const eventId = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2);
+  data.fbc = getCookie("_fbc") || null;
+  data.fbp = getCookie("_fbp") || null;
+  data.event_id = eventId;
+
   // Send the audit request using keepalive fetch so it survives page navigation.
   // Also use sendBeacon as a fallback — belt and suspenders.
   const payload = JSON.stringify(data);
@@ -75,12 +85,12 @@ document.getElementById("audit-form").addEventListener("submit", async (e) => {
     } catch (_) {}
   }
 
-  // Fire Meta Pixel Lead event for ad conversion tracking
+  // Fire Meta Pixel Lead event with shared eventID for deduplication
   if (typeof fbq === "function") {
     fbq("track", "Lead", {
       content_name: data.company_name,
       content_category: data.industry,
-    });
+    }, { eventID: eventId });
   }
 
   // Brief pause to let the request + pixel event leave the browser

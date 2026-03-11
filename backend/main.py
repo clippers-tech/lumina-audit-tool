@@ -18,6 +18,7 @@ from typing import Optional
 
 from storage import init_db, create_job, get_job, get_all_jobs
 from worker import run_pipeline
+from meta_capi import send_lead_event
 
 # Ensure directories exist
 os.makedirs("outputs", exist_ok=True)
@@ -64,6 +65,11 @@ class AuditRequest(BaseModel):
     # Business context
     own_revenue: Optional[str] = None
     competitor_name: Optional[str] = None
+
+    # Meta Pixel cookies (for Conversions API attribution)
+    fbc: Optional[str] = None   # _fbc cookie from browser
+    fbp: Optional[str] = None   # _fbp cookie from browser
+    event_id: Optional[str] = None  # shared with browser Pixel for dedup
 
 
 # ── Routes ──
@@ -121,6 +127,18 @@ async def create_audit(req: AuditRequest):
 
     # Fire background pipeline
     asyncio.create_task(run_pipeline(job_id))
+
+    # Send Lead event to Meta Conversions API (non-blocking)
+    asyncio.create_task(
+        send_lead_event(
+            email=req.email.strip(),
+            full_name=req.full_name.strip(),
+            source_url="https://audits.luminaclippers.com",
+            fbc=req.fbc,
+            fbp=req.fbp,
+            event_id=req.event_id,
+        )
+    )
 
     return JSONResponse({
         "job_id": job_id,
